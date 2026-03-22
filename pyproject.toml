@@ -17,6 +17,8 @@ dependencies = [
     "pysrt>=1.1.2",
     "moviepy>=1.0.3",
     "pydub>=0.25.1",
+    "edge-tts>=6.1.0",
+    "httpx>=0.25.0",
 ]
 
 [project.scripts]
@@ -30,6 +32,11 @@ peanut-segment-topics = "peanut_reacts.cli.segment_topics:main"
 peanut-render-character = "peanut_reacts.cli.render_character:main"
 peanut-overlay = "peanut_reacts.cli.overlay:main"
 peanut-concat = "peanut_reacts.cli.concat:main"
+peanut-extract-comments = "peanut_reacts.cli.extract_comments:main"
+peanut-generate-reactions = "peanut_reacts.cli.generate_reactions:main"
+peanut-synthesize-tts = "peanut_reacts.cli.synthesize_tts:main"
+peanut-render-synced = "peanut_reacts.cli.render_synced:main"
+peanut-react = "peanut_reacts.cli.react:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -34,8 +34,18 @@ def _lerp(a: float, b: float, t: float) -> float:
 # Character drawing
 # ---------------------------------------------------------------------------
 
-def draw_peanut_character(t: float, size: int = 512, seed: int = 0) -> Image.Image:
+def draw_peanut_character(
+    t: float,
+    size: int = 512,
+    seed: int = 0,
+    *,
+    mouth_open_override: float | None = None,
+) -> Image.Image:
     """Draw a single frame of the peanut character at time *t* seconds.
+
+    If *mouth_open_override* is provided (0.0–1.0), it drives the mouth
+    instead of the default sine-wave animation. This enables speech-synced
+    animation from TTS word timings.
 
     Returns an RGBA PIL Image.
     """
@@ -104,9 +114,12 @@ def draw_peanut_character(t: float, size: int = 512, seed: int = 0) -> Image.Ima
     look_x = 0.5 * math.sin(2 * math.pi * 0.23 * t)
     look_y = 0.35 * math.sin(2 * math.pi * 0.17 * t + 1.3)
 
-    talk = 0.5 + 0.5 * math.sin(2 * math.pi * 1.35 * t)
-    talk = talk * talk
-    mouth_open = _lerp(0.12, 1.0, talk)
+    if mouth_open_override is not None:
+        mouth_open = _lerp(0.12, 1.0, _clamp(mouth_open_override, 0.0, 1.0))
+    else:
+        talk = 0.5 + 0.5 * math.sin(2 * math.pi * 1.35 * t)
+        talk = talk * talk
+        mouth_open = _lerp(0.12, 1.0, talk)
 
     # Eyes
     eye_y = cy - int(size * 0.05)
