@@ -1,0 +1,246 @@
+"""
+Peanut character renderer.
+
+Generates animated peanut character frames with blinking, talking,
+bouncing, and wobbling animations. Exports as GIF or alpha-channel WebM.
+
+Refactored from archive/charachter_creation.py.
+"""
+
+from __future__ import annotations
+
+import math
+import os
+import random
+import subprocess
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFilter
+
+
+# ---------------------------------------------------------------------------
+# Math helpers
+# ---------------------------------------------------------------------------
+
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+def _lerp(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
+
+# ---------------------------------------------------------------------------
+# Character drawing
+# ---------------------------------------------------------------------------
+
+def draw_peanut_character(t: float, size: int = 512, seed: int = 0) -> Image.Image:
+    """Draw a single frame of the peanut character at time *t* seconds.
+
+    Returns an RGBA PIL Image.
+    """
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    base = (205, 165, 105, 255)
+    shadow = (170, 125, 75, 255)
+    outline = (120, 80, 45, 255)
+    highlight = (255, 235, 200, 110)
+
+    cx, cy = size // 2, size // 2
+
+    # Body: two overlapping ellipses
+    top = (cx - int(size * 0.28), cy - int(size * 0.34), cx + int(size * 0.28), cy + int(size * 0.06))
+    bot = (cx - int(size * 0.32), cy - int(size * 0.02), cx + int(size * 0.32), cy + int(size * 0.38))
+
+    d.ellipse(top, fill=base)
+    d.ellipse(bot, fill=base)
+
+    # Shadow
+    shadow_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow_layer)
+    sd.ellipse((top[0] + int(size * 0.04), top[1] + int(size * 0.03), top[2], top[3]), fill=shadow)
+    sd.ellipse((bot[0] + int(size * 0.05), bot[1] + int(size * 0.03), bot[2], bot[3]), fill=shadow)
+    shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=int(size * 0.01)))
+    img = Image.alpha_composite(img, shadow_layer)
+    d = ImageDraw.Draw(img)
+
+    # Outlines
+    for w in range(3):
+        d.ellipse((top[0] - w, top[1] - w, top[2] + w, top[3] + w), outline=outline)
+        d.ellipse((bot[0] - w, bot[1] - w, bot[2] + w, bot[3] + w), outline=outline)
+
+    # Speckles
+    rng = random.Random(seed)
+    speck_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    sp = ImageDraw.Draw(speck_layer)
+    speck_color = (150, 105, 60, 140)
+    for _ in range(55):
+        x = rng.randint(int(size * 0.30), int(size * 0.70))
+        y = rng.randint(int(size * 0.18), int(size * 0.78))
+        r = rng.randint(1, 3)
+        sp.ellipse((x - r, y - r, x + r, y + r), fill=speck_color)
+    speck_layer = speck_layer.filter(ImageFilter.GaussianBlur(radius=0.6))
+    img = Image.alpha_composite(img, speck_layer)
+    d = ImageDraw.Draw(img)
+
+    # Highlight
+    hl = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    hd = ImageDraw.Draw(hl)
+    hd.ellipse((cx - int(size * 0.22), cy - int(size * 0.30),
+                cx - int(size * 0.02), cy - int(size * 0.02)), fill=highlight)
+    hl = hl.filter(ImageFilter.GaussianBlur(radius=int(size * 0.02)))
+    img = Image.alpha_composite(img, hl)
+    d = ImageDraw.Draw(img)
+
+    # Animation parameters
+    blink_period = 4.0
+    blink_phase = t % blink_period
+    blink = 0.0
+    if blink_phase < 0.14:
+        blink = 1.0 - abs((blink_phase / 0.07) - 1.0)
+        blink = _clamp(blink, 0.0, 1.0)
+
+    look_x = 0.5 * math.sin(2 * math.pi * 0.23 * t)
+    look_y = 0.35 * math.sin(2 * math.pi * 0.17 * t + 1.3)
+
+    talk = 0.5 + 0.5 * math.sin(2 * math.pi * 1.35 * t)
+    talk = talk * talk
+    mouth_open = _lerp(0.12, 1.0, talk)
+
+    # Eyes
+    eye_y = cy - int(size * 0.05)
+    eye_dx = int(size * 0.09)
+    eye_w = int(size * 0.10)
+    eye_h = int(size * 0.12)
+    blink_factor = _lerp(1.0, 0.12, blink)
+    eh = max(2, int(eye_h * blink_factor))
+
+    def draw_eye(ex: int, ey: int) -> None:
+        d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2), fill=(255, 255, 255, 255))
+        d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2), outline=(70, 50, 35, 255), width=2)
+
+        pupil_r = int(size * 0.018)
+        px = ex + int(look_x * eye_w * 0.20) if blink <= 0.2 else ex
+        py = ey + int(look_y * eye_h * 0.12) if blink <= 0.2 else ey
+
+        d.ellipse((px - pupil_r, py - pupil_r, px + pupil_r, py + pupil_r), fill=(20, 20, 20, 255))
+        hr = max(1, pupil_r // 3)
+        d.ellipse((px - hr + 2, py - hr - 2, px + hr + 2, py + hr - 2), fill=(255, 255, 255, 180))
+
+    draw_eye(cx - eye_dx, eye_y)
+    draw_eye(cx + eye_dx, eye_y)
+
+    # Mouth
+    mouth_cx = cx
+    mouth_cy = cy + int(size * 0.18)
+    mw = int(size * 0.22)
+    mh = int(size * 0.10 * mouth_open)
+
+    if mouth_open < 0.25:
+        arc_box = (mouth_cx - mw // 2, mouth_cy - int(size * 0.02),
+                   mouth_cx + mw // 2, mouth_cy + int(size * 0.12))
+        d.arc(arc_box, start=200, end=340, fill=(60, 35, 25, 255), width=4)
+    else:
+        mouth_box = (mouth_cx - mw // 2, mouth_cy - mh // 2, mouth_cx + mw // 2, mouth_cy + mh // 2)
+        d.ellipse(mouth_box, fill=(70, 20, 25, 255), outline=(40, 10, 12, 255), width=3)
+
+        teeth_h = int(mh * 0.35)
+        teeth_box = (mouth_cx - int(mw * 0.42), mouth_cy - mh // 2 + 3,
+                     mouth_cx + int(mw * 0.42), mouth_cy - mh // 2 + 3 + teeth_h)
+        d.rounded_rectangle(teeth_box, radius=teeth_h // 2, fill=(245, 245, 245, 255))
+
+        tongue_box = (mouth_cx - int(mw * 0.28), mouth_cy + int(mh * 0.05),
+                      mouth_cx + int(mw * 0.28), mouth_cy + int(mh * 0.45))
+        d.ellipse(tongue_box, fill=(170, 60, 80, 200))
+
+    # Cheek blush
+    blush = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(blush)
+    blush_alpha = int(60 + 30 * math.sin(2 * math.pi * 0.5 * t + 0.8))
+    blush_color = (255, 120, 140, _clamp(blush_alpha, 20, 110))
+    for sign in (-1, 1):
+        bx = cx + sign * int(size * 0.18)
+        by = cy + int(size * 0.08)
+        bd.ellipse((bx - 18, by - 12, bx + 18, by + 12), fill=blush_color)
+    blush = blush.filter(ImageFilter.GaussianBlur(radius=6))
+    img = Image.alpha_composite(img, blush)
+
+    return img
+
+
+# ---------------------------------------------------------------------------
+# Frame rendering
+# ---------------------------------------------------------------------------
+
+def render_frames(
+    out_dir: Path,
+    duration: float,
+    fps: int,
+    canvas: int,
+    char_size: int,
+    seed: int,
+) -> None:
+    """Render *duration* seconds of peanut animation frames as PNGs."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    total_frames = int(round(duration * fps))
+
+    for i in range(total_frames):
+        t = i / fps
+        frame = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+        char = draw_peanut_character(t, size=char_size, seed=seed)
+
+        bounce = int(8 * math.sin(2 * math.pi * 0.7 * t))
+        wobble_deg = 4.0 * math.sin(2 * math.pi * 0.35 * t)
+        char_rot = char.rotate(wobble_deg, resample=Image.BICUBIC, expand=True)
+
+        x = (canvas - char_rot.width) // 2
+        y = (canvas - char_rot.height) // 2 + bounce
+        frame.alpha_composite(char_rot, (x, y))
+        frame.save(out_dir / f"{i:04d}.png", "PNG")
+
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
+
+def export_gif(frames_dir: Path, fps: int, output_path: Path) -> Path:
+    """Create an optimised GIF from rendered frames using ffmpeg."""
+    palette_path = output_path.parent / "palette.png"
+
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-framerate", str(fps),
+        "-i", str(frames_dir / "%04d.png"),
+        "-vf", "palettegen=stats_mode=diff",
+        str(palette_path),
+    ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-framerate", str(fps),
+        "-i", str(frames_dir / "%04d.png"),
+        "-i", str(palette_path),
+        "-lavfi", "paletteuse=dither=bayer:bayer_scale=5",
+        "-loop", "0",
+        str(output_path),
+    ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    palette_path.unlink(missing_ok=True)
+    return output_path
+
+
+def export_alpha_webm(frames_dir: Path, fps: int, output_path: Path) -> Path:
+    """Create a VP9 WebM with alpha channel from rendered frames."""
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-framerate", str(fps),
+        "-i", str(frames_dir / "%04d.png"),
+        "-c:v", "libvpx-vp9",
+        "-pix_fmt", "yuva420p",
+        "-b:v", "0",
+        "-crf", "33",
+        str(output_path),
+    ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    return output_path
