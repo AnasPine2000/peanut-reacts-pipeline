@@ -44,6 +44,10 @@ class PlaylistJob:
     fragment_retries: int = 10
     concurrent_fragment_downloads: int = 4
 
+    # Comments & metadata
+    write_comments: bool = False
+    write_info_json: bool = False
+
     cookies_file: Optional[Path] = None
     cookies_from_browser: Optional[str] = None
 
@@ -136,6 +140,11 @@ class YtDlpOptionsFactory:
             "fragment_retries": job.fragment_retries,
             "concurrent_fragment_downloads": job.concurrent_fragment_downloads,
         }
+
+        if job.write_comments:
+            ydl_opts["getcomments"] = True
+        if job.write_info_json:
+            ydl_opts["writeinfojson"] = True
 
         if job.cookies_file:
             ydl_opts["cookiefile"] = str(job.cookies_file)

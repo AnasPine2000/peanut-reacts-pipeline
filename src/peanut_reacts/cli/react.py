@@ -72,10 +72,54 @@ def main() -> int:
     args = _parse_args()
     log = build_logger("peanut_react", args.verbose)
 
-    video_path = Path(args.video).expanduser().resolve()
-    if not video_path.exists():
-        log.error("Video not found: %s", video_path)
-        return 2
+    video_input = args.video.strip()
+    is_url = video_input.startswith("http://") or video_input.startswith("https://")
+
+    if is_url:
+        # Download the video first
+        log.info("URL detected — downloading video with comments ...")
+        import yt_dlp
+
+        work_dir = Path(args.work_dir) if args.work_dir else Path("peanut_work")
+        work_dir.mkdir(parents=True, exist_ok=True)
+        dl_dir = work_dir / "download"
+        dl_dir.mkdir(exist_ok=True)
+
+        ydl_opts = {
+            "format": "bestvideo+bestaudio/best",
+            "merge_output_format": "mp4",
+            "outtmpl": str(dl_dir / "%(title)s.%(ext)s"),
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+            "subtitleslangs": ["en"],
+            "subtitlesformat": "srt",
+            "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "srt"}],
+            "writeinfojson": True,
+            "getcomments": True,
+            "windowsfilenames": True,
+            "ignoreerrors": True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_input, download=True)
+
+        if not info:
+            log.error("Failed to download video.")
+            return 1
+
+        # Find the downloaded video file
+        import os
+        video_files = [dl_dir / f for f in os.listdir(dl_dir) if f.endswith(".mp4")]
+        if not video_files:
+            log.error("No video file found after download.")
+            return 1
+        video_path = video_files[0]
+        log.info("Downloaded: %s", video_path.name)
+    else:
+        video_path = Path(video_input).expanduser().resolve()
+        if not video_path.exists():
+            log.error("Video not found: %s", video_path)
+            return 2
 
     if args.output:
         output_path = Path(args.output).expanduser().resolve()

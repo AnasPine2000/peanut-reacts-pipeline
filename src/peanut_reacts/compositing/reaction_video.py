@@ -205,6 +205,21 @@ def _final_composite(
         )
         prev_label = out_label
 
+    # Add speech bubble text for each reaction line
+    for i, (line, _) in enumerate(peanut_segments):
+        enable = f"between(t,{line.start:.2f},{line.end:.2f})"
+        # Escape text for ffmpeg drawtext (colons, quotes, backslashes)
+        safe_text = line.text.replace("\\", "\\\\").replace("'", "\u2019").replace(":", "\\:").replace("%", "%%")
+        out_label = f"t{i}"
+        video_filters.append(
+            f"[{prev_label}]drawtext="
+            f"text='{safe_text}':"
+            f"fontsize=28:fontcolor=white:borderw=3:bordercolor=black:"
+            f"x=(w-tw)/2:y=h-80:"
+            f"enable='{enable}'[{out_label}]",
+        )
+        prev_label = out_label
+
     final_video_label = prev_label if video_filters else "0:v"
 
     # Audio mixing with ducking

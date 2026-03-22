@@ -32,6 +32,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--subs-format", default="srt", help="Subtitle format (default: srt)")
     p.add_argument("--cookies-file", default=None, help="Path to cookies.txt")
     p.add_argument("--cookies-from-browser", default=None, help='e.g. chrome or "chrome:Profile 1"')
+    p.add_argument("--write-comments", action="store_true", help="Download comments (for peanut-react pipeline)")
+    p.add_argument("--write-info-json", action="store_true", help="Write info.json metadata files")
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
 
@@ -64,6 +66,8 @@ def main() -> int:
         subtitles_format=args.subs_format.strip() or "srt",
         cookies_file=cookies_file,
         cookies_from_browser=args.cookies_from_browser,
+        write_comments=args.write_comments,
+        write_info_json=args.write_info_json or args.write_comments,
     )
 
     app = PlaylistDownloadApp(
