@@ -90,8 +90,9 @@ class EdgeTTSEngine:
     async def synthesize(self, text: str, output_path: Path) -> TTSResult:
         """Generate speech audio and return timing metadata.
 
-        Uses edge-tts ``Communicate`` class which yields ``WordBoundary``
-        events containing offset and duration for each word.
+        Uses edge-tts ``Communicate`` class which yields boundary events.
+        Captures both ``WordBoundary`` and ``SentenceBoundary`` events
+        (edge-tts v7+ only emits SentenceBoundary).
         """
         import edge_tts
 
@@ -115,8 +116,9 @@ class EdgeTTSEngine:
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
                     audio_file.write(chunk["data"])
-                elif chunk["type"] == "WordBoundary":
-                    offset = int(chunk["offset"]) // 10000  # 100ns units → ms
+                elif chunk["type"] in ("WordBoundary", "SentenceBoundary"):
+                    # edge-tts uses 100-nanosecond units
+                    offset = int(chunk["offset"]) // 10000  # -> ms
                     duration = int(chunk["duration"]) // 10000
                     word_text = chunk.get("text", "")
                     word_timings.append(TTSWordTiming(
@@ -124,8 +126,25 @@ class EdgeTTSEngine:
                     ))
                     audio_duration_ms = max(audio_duration_ms, offset + duration)
 
+        # If no boundary events captured, estimate duration from audio file size
+        if audio_duration_ms == 0 and output_path.stat().st_size > 0:
+            try:
+                from peanut_reacts.core.ffmpeg import get_video_duration
+                audio_duration_ms = int(get_video_duration(output_path) * 1000)
+                # Create a single timing spanning the whole audio
+                word_timings = [TTSWordTiming(
+                    offset_ms=0, duration_ms=audio_duration_ms, text=text,
+                )]
+            except Exception:
+                # Estimate at ~150 wpm
+                words = len(text.split())
+                audio_duration_ms = int(words / 2.5 * 1000)
+                word_timings = [TTSWordTiming(
+                    offset_ms=0, duration_ms=audio_duration_ms, text=text,
+                )]
+
         duration_sec = audio_duration_ms / 1000.0
-        self._log.debug("Synthesized '%s' → %s (%.2fs)", text[:50], output_path.name, duration_sec)
+        self._log.debug("Synthesized '%s' -> %s (%.2fs)", text[:50], output_path.name, duration_sec)
 
         return TTSResult(
             audio_path=output_path,
@@ -164,7 +183,7 @@ class EdgeTTSEngine:
                 result = self.synthesize_sync(text, audio_path)
                 results.append((line, result))
                 self._log.info(
-                    "TTS [%d/%d]: '%s' → %.2fs",
+                    "TTS [%d/%d]: '%s' -> %.2fs",
                     idx + 1, len(lines), text[:40], result.duration,
                 )
             except Exception as exc:

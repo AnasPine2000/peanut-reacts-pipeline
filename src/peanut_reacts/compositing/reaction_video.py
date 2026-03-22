@@ -29,7 +29,7 @@ from peanut_reacts.character.reaction_generator import (
     script_to_dict,
 )
 from peanut_reacts.character.sync import (
-    render_reaction_webm,
+    render_reaction_video,
     word_timings_to_speech_events,
 )
 from peanut_reacts.character.tts import EdgeTTSEngine, TTSConfig, TTSResult
@@ -108,30 +108,37 @@ def _build_reaction_audio(
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         return output_path
 
-    inputs: list[str] = []
-    filters: list[str] = []
+    # Strategy: generate a silent base track, then mix each TTS clip on top.
+    valid_pairs = [(line, tts) for line, tts in tts_pairs if tts.duration > 0]
 
-    for idx, (line, tts) in enumerate(tts_pairs):
-        if tts.duration <= 0:
-            continue
-        inputs.extend(["-i", str(tts.audio_path)])
-        delay_ms = int(line.start * 1000)
-        filters.append(f"[{idx}:a]adelay={delay_ms}|{delay_ms}[a{idx}]")
+    _silent_cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-t", str(video_duration), "-c:a", "aac", str(output_path),
+    ]
 
-    if not filters:
-        cmd = [
-            "ffmpeg", "-y",
-            "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo:d={video_duration}",
-            "-c:a", "aac", str(output_path),
-        ]
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    if not valid_pairs:
+        subprocess.run(_silent_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         return output_path
 
-    n = len(filters)
-    mix_inputs = "".join(f"[a{i}]" for i in range(n))
-    filters.append(f"{mix_inputs}amix=inputs={n}:duration=longest:dropout_transition=2[mixed]")
-    # Pad/trim to video duration
-    filters.append(f"[mixed]apad=whole_dur={video_duration}[out]")
+    # Input 0 = silent base, inputs 1..N = TTS clips
+    inputs: list[str] = [
+        "-f", "lavfi", "-t", str(video_duration), "-i", "anullsrc=r=44100:cl=stereo",
+    ]
+    filters: list[str] = []
+
+    for idx, (line, tts) in enumerate(valid_pairs):
+        input_idx = idx + 1
+        inputs.extend(["-i", str(tts.audio_path)])
+        delay_ms = int(line.start * 1000)
+        filters.append(
+            f"[{input_idx}:a]aresample=44100,adelay={delay_ms}|{delay_ms}[a{idx}]",
+        )
+
+    # Mix: base + all delayed clips
+    n = len(valid_pairs)
+    mix_inputs = "[0:a]" + "".join(f"[a{i}]" for i in range(n))
+    filters.append(f"{mix_inputs}amix=inputs={n + 1}:duration=first:dropout_transition=2[out]")
 
     filter_complex = ";".join(filters)
 
@@ -188,9 +195,13 @@ def _final_composite(
         input_idx = i + 1
         out_label = f"v{i}"
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
+        # Apply colorkey to remove green-screen background, then overlay
         video_filters.append(
-            f"[{prev_label}][{input_idx}:v]overlay=x={peanut_x}:y={peanut_y}"
-            f":enable='{enable}':format=auto[{out_label}]",
+            f"[{input_idx}:v]colorkey=0x00FF00:0.3:0.2[ck{i}]",
+        )
+        video_filters.append(
+            f"[{prev_label}][ck{i}]overlay=x={peanut_x}:y={peanut_y}"
+            f":enable='{enable}'[{out_label}]",
         )
         prev_label = out_label
 
@@ -339,12 +350,16 @@ class ReactionPipeline:
                       for l in script.lines]
         tts_results = tts_engine.synthesize_lines(line_dicts, tts_dir)
 
-        # Map back to ReactionLine objects
+        # Map back to ReactionLine objects (only successfully synthesized lines)
         tts_pairs: list[tuple[ReactionLine, TTSResult]] = []
-        for (line_dict, tts_result), reaction_line in zip(tts_results, script.lines):
-            # Update end time with actual TTS duration
-            reaction_line.end = reaction_line.start + tts_result.duration
-            tts_pairs.append((reaction_line, tts_result))
+        for line_dict, tts_result in tts_results:
+            line = ReactionLine(
+                start=float(line_dict["start"]),
+                end=float(line_dict["start"]) + tts_result.duration,
+                text=line_dict["text"],
+                emotion=line_dict.get("emotion", "amused"),
+            )
+            tts_pairs.append((line, tts_result))
 
         self._log.info("Synthesized %d TTS segment(s).", len(tts_pairs))
 
@@ -360,10 +375,10 @@ class ReactionPipeline:
             speech_events = word_timings_to_speech_events(
                 tts_result.word_timings, line_start=0.0,
             )
-            webm_path = webm_dir / f"peanut_{idx + 1:03d}.webm"
+            webm_path = webm_dir / f"peanut_{idx + 1:03d}.mp4"
 
             self._log.info("Rendering peanut segment %d (%.2fs) ...", idx + 1, tts_result.duration)
-            render_reaction_webm(
+            render_reaction_video(
                 speech_events,
                 tts_result.duration + 0.3,
                 webm_path,

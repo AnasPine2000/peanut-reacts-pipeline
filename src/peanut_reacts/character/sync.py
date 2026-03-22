@@ -128,7 +128,8 @@ def render_synced_frames(
         t = i / fps
         mouth = compute_mouth_open(t, speech_events)
 
-        frame = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+        # Green-screen background for reliable chroma-keying in ffmpeg
+        frame = Image.new("RGBA", (canvas, canvas), (0, 255, 0, 255))
         char = draw_peanut_character(t, size=char_size, seed=seed, mouth_open_override=mouth)
 
         # Bounce and wobble (same as original renderer)
@@ -138,13 +139,14 @@ def render_synced_frames(
 
         x = (canvas - char_rot.width) // 2
         y = (canvas - char_rot.height) // 2 + bounce
-        frame.alpha_composite(char_rot, (x, y))
+        # Composite character onto green background
+        frame.paste(char_rot, (x, y), char_rot)
         frame.save(out_dir / f"{i:04d}.png", "PNG")
 
     logger.info("Rendered %d synced frames to %s", total_frames, out_dir)
 
 
-def render_reaction_webm(
+def render_reaction_video(
     speech_events: list[SpeechEvent],
     duration: float,
     output_path: Path,
@@ -154,10 +156,13 @@ def render_reaction_webm(
     char_size: int = 420,
     seed: int = 0,
 ) -> Path:
-    """Render speech-synced frames and export as alpha-channel WebM.
+    """Render speech-synced frames with green-screen background as MP4.
 
     Uses a temporary directory for intermediate PNG frames.
+    The green background is removed via colorkey during compositing.
     """
+    import subprocess
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="peanut_sync_") as tmp:
@@ -166,7 +171,19 @@ def render_reaction_webm(
             frames_dir, duration, fps, speech_events,
             canvas=canvas, char_size=char_size, seed=seed,
         )
-        export_alpha_webm(frames_dir, fps, output_path)
+        # Encode as MP4 (green-screen background)
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-i", str(frames_dir / "%04d.png"),
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+            "-pix_fmt", "yuv420p",
+            str(output_path),
+        ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    logger.info("Exported synced WebM: %s (%.2fs)", output_path.name, duration)
+    logger.info("Exported synced video: %s (%.2fs)", output_path.name, duration)
     return output_path
+
+
+# Keep backward compat alias
+render_reaction_webm = render_reaction_video
