@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peanut-reacts"
+version = "0.1.0"
+description = "YouTube reaction video creation toolkit with animated peanut character"
+requires-python = ">=3.10"
+dependencies = [
+    "yt-dlp>=2024.1.0",
+    "Pillow>=10.0.0",
+    "openai-whisper>=20231117",
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+    "scikit-learn>=1.3.0",
+    "pysrt>=1.1.2",
+    "moviepy>=1.0.3",
+    "pydub>=0.25.1",
+]
+
+[project.scripts]
+peanut-download-playlist = "peanut_reacts.cli.download_playlist:main"
+peanut-download-thumbnails = "peanut_reacts.cli.download_thumbnails:main"
+peanut-download-subtitles = "peanut_reacts.cli.download_subtitles:main"
+peanut-download-channel = "peanut_reacts.cli.download_channel:main"
+peanut-search-keywords = "peanut_reacts.cli.search_keywords:main"
+peanut-detect-loud = "peanut_reacts.cli.detect_loud:main"
+peanut-segment-topics = "peanut_reacts.cli.segment_topics:main"
+peanut-render-character = "peanut_reacts.cli.render_character:main"
+peanut-overlay = "peanut_reacts.cli.overlay:main"
+peanut-concat = "peanut_reacts.cli.concat:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
