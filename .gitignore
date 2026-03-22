@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Media files (large, downloaded content)
+*.mp4
+*.webm
+*.mkv
+*.avi
+*.wav
+*.gif
+*.mp3
+
+# Downloaded content directories
+downloads/
+output/
+thumbnails/
+output_clips/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temp files
+*.tmp
