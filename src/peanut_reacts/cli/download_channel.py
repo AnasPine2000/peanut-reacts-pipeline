@@ -18,6 +18,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--format", default="bestvideo+bestaudio/best")
     p.add_argument("--merge", default="mp4", help="Container format (default: mp4)")
     p.add_argument("--no-subs", action="store_true")
+    p.add_argument("--write-comments", action="store_true", help="Download comments (for peanut-react pipeline)")
+    p.add_argument("--write-info-json", action="store_true", help="Write info.json metadata files")
     p.add_argument("--cookies-file", default=None)
     p.add_argument("--cookies-from-browser", default=None)
     p.add_argument("-v", "--verbose", action="store_true")
@@ -47,6 +49,8 @@ def main() -> int:
         write_auto_subtitles=not args.no_subs,
         cookies_file=cookies_file,
         cookies_from_browser=args.cookies_from_browser,
+        write_comments=args.write_comments,
+        write_info_json=args.write_info_json or args.write_comments,
     )
 
     downloader = ChannelDownloader(log)

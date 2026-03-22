@@ -27,6 +27,8 @@ class ChannelJob:
     write_auto_subtitles: bool = True
     subtitles_format: str = "srt"
     ignore_errors: bool = True
+    write_comments: bool = False
+    write_info_json: bool = False
     cookies_file: Optional[Path] = None
     cookies_from_browser: Optional[str] = None
 
@@ -52,6 +54,11 @@ class ChannelDownloader:
             ],
             "outtmpl": str(job.output_folder / "%(title)s.%(ext)s"),
         }
+
+        if job.write_comments:
+            ydl_opts["getcomments"] = True
+        if job.write_info_json:
+            ydl_opts["writeinfojson"] = True
 
         if job.cookies_file:
             ydl_opts["cookiefile"] = str(job.cookies_file)
