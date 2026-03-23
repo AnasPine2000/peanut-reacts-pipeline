@@ -74,6 +74,11 @@ class ReactionJob:
     reaction_volume: float = 0.85
     original_duck: float = 0.25  # reduce original to 25% when peanut speaks
 
+    # Speaker diarization (color-coded subtitles)
+    enable_diarization: bool = False
+    hf_token: str = ""
+    num_speakers: int = 0  # 0 = auto-detect
+
     # Transcript
     transcript_path: Optional[Path] = None
     whisper_model: str = "base"
@@ -196,6 +201,7 @@ def _final_composite(
     output_path: Path,
     *,
     layout: LayoutConfig | None = None,
+    speaker_subtitle_filters: list[str] | None = None,
     video_width: int = 1920,
     video_height: int = 1080,
     original_duck: float = 0.4,
@@ -352,6 +358,14 @@ def _final_composite(
             f"enable='{enable}'[{out_label}]",
         )
         prev_label = out_label
+
+    # ── Color-coded speaker subtitles (if diarization enabled) ─────
+    if speaker_subtitle_filters:
+        for i, filt in enumerate(speaker_subtitle_filters):
+            out_label = f"sub{i}"
+            video_filters.append(f"[{prev_label}]{filt}[{out_label}]")
+            prev_label = out_label
+        logger.info("Added %d color-coded subtitle segments", len(speaker_subtitle_filters))
 
     final_video_label = prev_label if video_filters else "0:v"
 
@@ -697,6 +711,30 @@ class ReactionPipeline:
         reaction_audio = work_dir / "reaction_audio.aac"
         _build_reaction_audio(tts_pairs, video_duration, reaction_audio)
 
+        # Step 6b: Speaker diarization (color-coded subtitles)
+        speaker_filters: list[str] | None = None
+        if job.enable_diarization:
+            try:
+                from peanut_reacts.analysis.diarization import (
+                    diarize_video,
+                    align_transcript_with_speakers,
+                    build_subtitle_filters,
+                )
+                diarization = diarize_video(
+                    job.video_path,
+                    hf_token=job.hf_token,
+                    num_speakers=job.num_speakers or None,
+                    work_dir=work_dir,
+                )
+                colored_segs = align_transcript_with_speakers(transcript, diarization)
+                speaker_filters = build_subtitle_filters(colored_segs, font_size=20)
+                self._log.info(
+                    "Diarization: %d speakers, %d subtitle segments",
+                    diarization.num_speakers, len(colored_segs),
+                )
+            except Exception as e:
+                self._log.warning("Diarization failed (continuing without): %s", e)
+
         # Step 7: Final composite with facecam layout
         job.output_path.parent.mkdir(parents=True, exist_ok=True)
         _final_composite(
@@ -705,6 +743,7 @@ class ReactionPipeline:
             reaction_audio,
             job.output_path,
             layout=job.layout,
+            speaker_subtitle_filters=speaker_filters,
             video_width=video_w,
             video_height=video_h,
             original_duck=job.original_duck,

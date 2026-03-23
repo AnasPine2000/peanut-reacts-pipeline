@@ -73,6 +73,15 @@ def _parse_args() -> argparse.Namespace:
     up.add_argument("--client-secrets", default=None,
                     help="Path to OAuth client_secret.json (or set YOUTUBE_CLIENT_SECRETS in .env)")
 
+    # Subtitle options
+    sub = p.add_argument_group("Subtitle options")
+    sub.add_argument("--diarize", action="store_true",
+                     help="Enable speaker diarization for color-coded subtitles")
+    sub.add_argument("--hf-token", default="",
+                     help="HuggingFace token for pyannote (or set HF_TOKEN env var)")
+    sub.add_argument("--num-speakers", type=int, default=0,
+                     help="Number of speakers (0 = auto-detect)")
+
     # Layout options
     lay = p.add_argument_group("Layout options")
     lay.add_argument("--facecam-scale", type=float, default=0.22,
@@ -273,6 +282,7 @@ def main() -> int:
 
     transcript_path = Path(args.transcript) if args.transcript else None
 
+    import os as _os
     job = ReactionJob(
         video_path=video_path,
         output_path=output_path,
@@ -285,6 +295,9 @@ def main() -> int:
         whisper_model=args.whisper_model or cfg.whisper_model,
         whisper_device=args.whisper_device or cfg.whisper_device,
         work_dir=work_dir,
+        enable_diarization=args.diarize,
+        hf_token=args.hf_token or _os.environ.get("HF_TOKEN", ""),
+        num_speakers=args.num_speakers,
     )
 
     # ── Run pipeline with progress tracking ──────────────────────────
