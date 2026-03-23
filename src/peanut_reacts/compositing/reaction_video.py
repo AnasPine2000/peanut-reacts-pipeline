@@ -85,6 +85,28 @@ class ReactionJob:
 
 # ---------------------------------------------------------------------------
 # Audio compositing helpers
+_NVENC_AVAILABLE: bool | None = None
+
+
+def _check_nvenc() -> bool:
+    """Check if NVIDIA NVENC encoder is available."""
+    global _NVENC_AVAILABLE
+    if _NVENC_AVAILABLE is not None:
+        return _NVENC_AVAILABLE
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        _NVENC_AVAILABLE = "h264_nvenc" in result.stdout
+        if _NVENC_AVAILABLE:
+            logger.info("GPU encoding enabled (NVIDIA NVENC)")
+        return _NVENC_AVAILABLE
+    except Exception:
+        _NVENC_AVAILABLE = False
+        return False
+
+
 # ---------------------------------------------------------------------------
 
 def _build_reaction_audio(
@@ -360,11 +382,22 @@ def _final_composite(
     else:
         cmd.extend(["-map", "0:v", "-map", "0:a"])
 
-    cmd.extend([
-        "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k",
-        str(output_path),
-    ])
+    # Try GPU encoding first (NVENC), fall back to CPU (libx264)
+    use_nvenc = _check_nvenc()
+    if use_nvenc:
+        cmd.extend([
+            "-c:v", "h264_nvenc", "-preset", "fast",
+            "-b:v", "8M", "-maxrate", "12M",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k",
+            str(output_path),
+        ])
+    else:
+        cmd.extend([
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k",
+            str(output_path),
+        ])
 
     logger.info("Running final composite ...")
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
