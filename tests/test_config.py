@@ -49,7 +49,20 @@ class TestPeanutConfig:
     def test_load_from_dotenv(self, tmp_path: Path):
         env_file = tmp_path / ".env"
         env_file.write_text("YOUTUBE_API_KEY=test123\n", encoding="utf-8")
-        # Also need pyproject.toml for root detection
         (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
         cfg = load_config(tmp_path)
         assert cfg.youtube_api_key == "test123"
+
+    def test_invalid_float_falls_back(self, tmp_path: Path):
+        env_file = tmp_path / ".env"
+        env_file.write_text("LLM_TEMPERATURE=not_a_number\n", encoding="utf-8")
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
+        cfg = load_config(tmp_path)
+        assert cfg.llm_temperature == 0.8  # falls back to default
+
+    def test_invalid_int_falls_back(self, tmp_path: Path):
+        env_file = tmp_path / ".env"
+        env_file.write_text("MAX_REACTIONS=abc\n", encoding="utf-8")
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
+        cfg = load_config(tmp_path)
+        assert cfg.max_reactions == 15  # falls back to default

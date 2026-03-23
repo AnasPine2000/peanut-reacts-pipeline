@@ -148,7 +148,11 @@ def _build_reaction_audio(
         "-t", str(video_duration),
         str(output_path),
     ]
-    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace")[-500:]
+        logger.error("FFmpeg audio mix failed:\n%s", stderr)
+        raise RuntimeError(f"FFmpeg audio mix failed: {stderr[-200:]}")
     logger.info("Built reaction audio track: %s", output_path.name)
     return output_path
 
@@ -363,7 +367,11 @@ def _final_composite(
     ])
 
     logger.info("Running final composite ...")
-    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace")[-1000:]
+        logger.error("FFmpeg composite failed (exit %d):\n%s", result.returncode, stderr)
+        raise RuntimeError(f"FFmpeg composite failed: {stderr[-200:]}")
     logger.info("Final output: %s", output_path)
     return output_path
 
@@ -473,16 +481,35 @@ class ReactionPipeline:
                       for l in script.lines]
         tts_results = tts_engine.synthesize_lines(line_dicts, tts_dir)
 
-        # Map back to ReactionLine objects (only successfully synthesized lines)
+        # Map back to ReactionLine objects with corrected timing.
+        # End time = start + actual TTS duration (not the LLM's estimate).
+        # Clamp so reactions don't exceed video duration.
         tts_pairs: list[tuple[ReactionLine, TTSResult]] = []
         for line_dict, tts_result in tts_results:
+            if tts_result.duration <= 0:
+                continue
+            start = float(line_dict["start"])
+            end = min(start + tts_result.duration, video_duration)
             line = ReactionLine(
-                start=float(line_dict["start"]),
-                end=float(line_dict["start"]) + tts_result.duration,
+                start=start,
+                end=end,
                 text=line_dict["text"],
                 emotion=line_dict.get("emotion", "amused"),
             )
             tts_pairs.append((line, tts_result))
+
+        # Prevent overlapping reactions: trim end to not exceed next start
+        for i in range(len(tts_pairs) - 1):
+            cur_line, _ = tts_pairs[i]
+            next_line, _ = tts_pairs[i + 1]
+            if cur_line.end > next_line.start - 0.5:
+                trimmed = ReactionLine(
+                    start=cur_line.start,
+                    end=next_line.start - 0.5,
+                    text=cur_line.text,
+                    emotion=cur_line.emotion,
+                )
+                tts_pairs[i] = (trimmed, tts_pairs[i][1])
 
         self._log.info("Synthesized %d TTS segment(s).", len(tts_pairs))
 

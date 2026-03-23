@@ -10,6 +10,7 @@ their status, timestamps, and output paths. Enables:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 from dataclasses import asdict, dataclass, field
@@ -49,9 +50,14 @@ class ProgressTracker:
             try:
                 raw = json.loads(self._path.read_text(encoding="utf-8"))
                 for vid, entry in raw.get("videos", {}).items():
-                    self._data[vid] = VideoProgress(**entry)
+                    # Gracefully handle missing fields from older versions
+                    safe_entry = {
+                        f.name: entry.get(f.name, f.default if f.default is not dataclasses.MISSING else "")
+                        for f in dataclasses.fields(VideoProgress)
+                    }
+                    self._data[vid] = VideoProgress(**safe_entry)
                 logger.debug("Loaded progress: %d videos", len(self._data))
-            except (json.JSONDecodeError, TypeError) as e:
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
                 logger.warning("Could not load progress file: %s", e)
 
     def _save(self) -> None:

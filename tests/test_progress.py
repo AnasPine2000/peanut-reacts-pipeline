@@ -83,3 +83,24 @@ class TestProgressTracker:
         path.write_text("{}", encoding="utf-8")
         tracker = ProgressTracker(path)
         assert tracker.list_all() == []
+
+    def test_old_format_missing_fields(self, tmp_path: Path):
+        """Progress files from older versions may lack new fields."""
+        path = tmp_path / "progress.json"
+        old_data = {
+            "version": 1,
+            "videos": {
+                "vid_old": {
+                    "video_id": "vid_old",
+                    "title": "Old Video",
+                    "status": "completed",
+                    # Missing: url, step, error, output_path, comments_fetched, etc.
+                }
+            },
+        }
+        path.write_text(json.dumps(old_data), encoding="utf-8")
+        tracker = ProgressTracker(path)
+        p = tracker.get("vid_old")
+        assert p is not None
+        assert p.title == "Old Video"
+        assert p.status == "completed"

@@ -60,6 +60,9 @@ def word_timings_to_speech_events(
 
     raw.sort(key=lambda e: e[0])
 
+    if not raw:
+        return []
+
     # Merge close events
     merge_gap = merge_gap_ms / 1000.0
     merged: list[SpeechEvent] = []

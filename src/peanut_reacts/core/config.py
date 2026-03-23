@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -140,18 +141,38 @@ def load_config(config_dir: Optional[Path] = None) -> PeanutConfig:
             or default
         )
 
+    def _get_float(env_key: str, yaml_key: str = "", default: float = 0.0) -> float:
+        raw = _get(env_key, yaml_key, str(default))
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            logging.getLogger(__name__).warning(
+                "Invalid float for %s=%r, using default %s", env_key, raw, default,
+            )
+            return default
+
+    def _get_int(env_key: str, yaml_key: str = "", default: int = 0) -> int:
+        raw = _get(env_key, yaml_key, str(default))
+        try:
+            return int(raw)
+        except (ValueError, TypeError):
+            logging.getLogger(__name__).warning(
+                "Invalid int for %s=%r, using default %s", env_key, raw, default,
+            )
+            return default
+
     cfg.youtube_api_key = _get("YOUTUBE_API_KEY", "youtube_api_key")
     cfg.deepseek_api_key = _get("DEEPSEEK_API_KEY", "deepseek_api_key")
     cfg.groq_api_key = _get("GROQ_API_KEY", "groq_api_key")
 
     cfg.llm_provider = _get("LLM_PROVIDER", "llm_provider", "deepseek")
     cfg.llm_model = _get("LLM_MODEL", "llm_model", "")
-    cfg.llm_temperature = float(_get("LLM_TEMPERATURE", "llm_temperature", "0.8"))
+    cfg.llm_temperature = _get_float("LLM_TEMPERATURE", "llm_temperature", 0.8)
 
     cfg.tts_voice = _get("TTS_VOICE", "tts_voice", "en-US-GuyNeural")
     cfg.tts_rate = _get("TTS_RATE", "tts_rate", "+10%")
 
-    cfg.facecam_scale = float(_get("FACECAM_SCALE", "facecam_scale", "0.22"))
+    cfg.facecam_scale = _get_float("FACECAM_SCALE", "facecam_scale", 0.22)
     cfg.facecam_position = _get("FACECAM_POSITION", "facecam_position", "bottom-right")
     cfg.name_tag = _get("NAME_TAG", "name_tag", "PEANUT")
 
@@ -159,8 +180,8 @@ def load_config(config_dir: Optional[Path] = None) -> PeanutConfig:
     cfg.output_dir = _get("OUTPUT_DIR", "output_dir", "downloads")
     cfg.work_dir = _get("WORK_DIR", "work_dir", "peanut_work")
 
-    cfg.max_reactions = int(_get("MAX_REACTIONS", "max_reactions", "15"))
-    cfg.max_comments = int(_get("MAX_COMMENTS", "max_comments", "500"))
+    cfg.max_reactions = _get_int("MAX_REACTIONS", "max_reactions", 15)
+    cfg.max_comments = _get_int("MAX_COMMENTS", "max_comments", 500)
     cfg.whisper_model = _get("WHISPER_MODEL", "whisper_model", "base")
     cfg.whisper_device = _get("WHISPER_DEVICE", "whisper_device", "cuda")
 
