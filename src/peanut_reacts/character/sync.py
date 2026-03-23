@@ -112,11 +112,12 @@ def render_synced_frames(
     canvas: int = 512,
     char_size: int = 420,
     seed: int = 0,
+    emotion: str = "neutral",
 ) -> None:
     """Render speech-synced animation frames as PNGs.
 
     Uses the existing :func:`draw_peanut_character` with ``mouth_open_override``
-    driven by TTS word timings.
+    driven by TTS word timings, and ``emotion`` for expression variation.
     """
     import math
     from PIL import Image
@@ -130,7 +131,10 @@ def render_synced_frames(
 
         # Green-screen background for reliable chroma-keying in ffmpeg
         frame = Image.new("RGBA", (canvas, canvas), (0, 255, 0, 255))
-        char = draw_peanut_character(t, size=char_size, seed=seed, mouth_open_override=mouth)
+        char = draw_peanut_character(
+            t, size=char_size, seed=seed,
+            mouth_open_override=mouth, emotion=emotion,
+        )
 
         # Bounce and wobble (same as original renderer)
         bounce = int(8 * math.sin(2 * math.pi * 0.7 * t))
@@ -143,7 +147,7 @@ def render_synced_frames(
         frame.paste(char_rot, (x, y), char_rot)
         frame.save(out_dir / f"{i:04d}.png", "PNG")
 
-    logger.info("Rendered %d synced frames to %s", total_frames, out_dir)
+    logger.info("Rendered %d synced frames (%s) to %s", total_frames, emotion, out_dir)
 
 
 def render_reaction_video(
@@ -155,6 +159,7 @@ def render_reaction_video(
     canvas: int = 512,
     char_size: int = 420,
     seed: int = 0,
+    emotion: str = "neutral",
 ) -> Path:
     """Render speech-synced frames with green-screen background as MP4.
 
@@ -170,6 +175,7 @@ def render_reaction_video(
         render_synced_frames(
             frames_dir, duration, fps, speech_events,
             canvas=canvas, char_size=char_size, seed=seed,
+            emotion=emotion,
         )
         # Encode as MP4 (green-screen background)
         subprocess.run([

@@ -212,11 +212,20 @@ def _final_composite(
     video_filters: list[str] = []
     prev_label = "0:v"
 
-    # ── Draw facecam background frame (always visible) ───────────────
+    # ── Build enable expression covering all reaction times ──────────
+    # The facecam frame + name tag only appear when peanut is speaking
+    all_enables = "+".join(
+        f"between(t,{line.start:.2f},{line.end:.2f})"
+        for line, _ in peanut_segments
+    )
+    frame_enable = f"enable='gt({all_enables},0)'" if all_enables else ""
+
+    # ── Draw facecam background frame (visible during reactions) ─────
     video_filters.append(
         f"[{prev_label}]drawbox="
         f"x={fc_x}:y={fc_y}:w={fc_size}:h={fc_size}:"
-        f"color={layout.facecam_bg_color}:t=fill[bg0]",
+        f"color={layout.facecam_bg_color}:t=fill:"
+        f"{frame_enable}[bg0]",
     )
     prev_label = "bg0"
 
@@ -224,14 +233,14 @@ def _final_composite(
     video_filters.append(
         f"[{prev_label}]drawbox="
         f"x={fc_x}:y={fc_y}:w={fc_size}:h={fc_size}:"
-        f"color={layout.facecam_border_color}:t={layout.facecam_border_width}[frame0]",
+        f"color={layout.facecam_border_color}:t={layout.facecam_border_width}:"
+        f"{frame_enable}[frame0]",
     )
     prev_label = "frame0"
 
     # ── Name tag at bottom of facecam frame ──────────────────────────
     if layout.name_tag_enabled:
         tag_text = layout.name_tag_text.replace("'", "\u2019").replace(":", "\\:")
-        # Center the tag horizontally within the facecam box
         tag_center_x = fc_x + fc_size // 2
         tag_y = fc_y + fc_size - layout.name_tag_font_size - 10
 
@@ -241,7 +250,8 @@ def _final_composite(
             f"fontsize={layout.name_tag_font_size}:fontcolor={layout.name_tag_font_color}:"
             f"borderw=1:bordercolor=black:"
             f"box=1:boxcolor={layout.name_tag_bg_color}:boxborderw=6:"
-            f"x={tag_center_x}-tw/2:y={tag_y}[nametag]",
+            f"x={tag_center_x}-tw/2:y={tag_y}:"
+            f"{frame_enable}[nametag]",
         )
         prev_label = "nametag"
 
@@ -251,7 +261,6 @@ def _final_composite(
         out_label = f"v{i}"
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
 
-        # Scale peanut to fit facecam box, then remove green screen
         video_filters.append(
             f"[{input_idx}:v]scale={fc_size}:{fc_size},"
             f"colorkey=0x00FF00:0.3:0.2[ck{i}]",
@@ -263,6 +272,9 @@ def _final_composite(
         prev_label = out_label
 
     # ── Speech text (subtitle style near facecam) ────────────────────
+    # Compute max text width to prevent overflow at video edges
+    max_text_w = min(fc_size + 60, vw - fc_x - 10)  # clamp to not exceed right edge
+
     for i, (line, _) in enumerate(peanut_segments):
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
         safe_text = (
@@ -278,22 +290,34 @@ def _final_composite(
             speech_x = "(w-tw)/2"
             speech_y = str(vh - 60)
         else:
-            # Center text horizontally within the facecam column
-            speech_center_x = fc_x + fc_size // 2
-            speech_x = f"{speech_center_x}-tw/2"
-            if pos in (FacecamPosition.BOTTOM_RIGHT, FacecamPosition.BOTTOM_LEFT):
-                speech_y = str(fc_y - 40)  # above facecam
+            # Clamp text to stay within video bounds
+            if pos in (FacecamPosition.BOTTOM_RIGHT, FacecamPosition.TOP_RIGHT):
+                # Right-align text to facecam right edge
+                right_edge = fc_x + fc_size
+                speech_x = f"{right_edge}-tw"
             else:
-                speech_y = str(fc_y + fc_size + 15)  # below facecam
+                speech_x = str(fc_x)
+
+            if pos in (FacecamPosition.BOTTOM_RIGHT, FacecamPosition.BOTTOM_LEFT):
+                speech_y = str(fc_y - 40)
+            else:
+                speech_y = str(fc_y + fc_size + 15)
 
         box_opts = ""
         if layout.speech_bg_enabled:
             box_opts = f"box=1:boxcolor={layout.speech_bg_color}:boxborderw=8:"
 
+        # Use a smaller font for longer text to prevent overflow
+        font_size = layout.speech_font_size
+        if len(line.text) > 35:
+            font_size = max(14, font_size - 4)
+        if len(line.text) > 50:
+            font_size = max(12, font_size - 4)
+
         video_filters.append(
             f"[{prev_label}]drawtext="
             f"text='{safe_text}':"
-            f"fontsize={layout.speech_font_size}:"
+            f"fontsize={font_size}:"
             f"fontcolor={layout.speech_font_color}:"
             f"borderw={layout.speech_border_width}:"
             f"bordercolor={layout.speech_border_color}:"
@@ -476,7 +500,10 @@ class ReactionPipeline:
             )
             webm_path = webm_dir / f"peanut_{idx + 1:03d}.mp4"
 
-            self._log.info("Rendering peanut segment %d (%.2fs) ...", idx + 1, tts_result.duration)
+            self._log.info(
+                "Rendering peanut segment %d (%.2fs, %s) ...",
+                idx + 1, tts_result.duration, line.emotion,
+            )
             render_reaction_video(
                 speech_events,
                 tts_result.duration + 0.3,
@@ -485,6 +512,7 @@ class ReactionPipeline:
                 canvas=job.peanut_canvas,
                 char_size=job.peanut_char_size,
                 seed=job.peanut_seed,
+                emotion=line.emotion,
             )
             peanut_segments.append((line, webm_path))
 

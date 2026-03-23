@@ -40,12 +40,21 @@ def draw_peanut_character(
     seed: int = 0,
     *,
     mouth_open_override: float | None = None,
+    emotion: str = "neutral",
 ) -> Image.Image:
     """Draw a single frame of the peanut character at time *t* seconds.
 
     If *mouth_open_override* is provided (0.0–1.0), it drives the mouth
     instead of the default sine-wave animation. This enables speech-synced
     animation from TTS word timings.
+
+    *emotion* affects the character's expression:
+    - "neutral": default relaxed face
+    - "amused" / "sarcastic": slight smirk, half-closed eyes
+    - "excited": wide eyes, big smile
+    - "shocked": very wide eyes, open round mouth
+    - "confused": one eyebrow raised, squinted
+    - "angry": furrowed brows, downturned mouth
 
     Returns an RGBA PIL Image.
     """
@@ -56,6 +65,30 @@ def draw_peanut_character(
     shadow = (170, 125, 75, 255)
     outline = (120, 80, 45, 255)
     highlight = (255, 235, 200, 110)
+
+    # Emotion-specific modifiers
+    eye_scale = 1.0
+    brow_angle = 0.0  # degrees, positive = angry
+    brow_offset_y = 0  # pixels up/down
+    blush_boost = 0
+    extra_mouth_scale = 1.0
+
+    if emotion in ("excited",):
+        eye_scale = 1.3
+        blush_boost = 30
+        extra_mouth_scale = 1.2
+    elif emotion in ("shocked",):
+        eye_scale = 1.5
+        extra_mouth_scale = 1.4
+    elif emotion in ("amused", "sarcastic"):
+        eye_scale = 0.85
+        blush_boost = 20
+    elif emotion in ("confused",):
+        eye_scale = 0.9
+        brow_angle = -8.0  # one brow up
+    elif emotion in ("angry",):
+        brow_angle = 12.0
+        brow_offset_y = -int(size * 0.01)
 
     cx, cy = size // 2, size // 2
 
@@ -121,19 +154,19 @@ def draw_peanut_character(
         talk = talk * talk
         mouth_open = _lerp(0.12, 1.0, talk)
 
-    # Eyes
+    # Eyes (scaled by emotion)
     eye_y = cy - int(size * 0.05)
     eye_dx = int(size * 0.09)
-    eye_w = int(size * 0.10)
-    eye_h = int(size * 0.12)
+    eye_w = int(size * 0.10 * eye_scale)
+    eye_h = int(size * 0.12 * eye_scale)
     blink_factor = _lerp(1.0, 0.12, blink)
     eh = max(2, int(eye_h * blink_factor))
 
-    def draw_eye(ex: int, ey: int) -> None:
+    def draw_eye(ex: int, ey: int, brow_tilt: float = 0.0) -> None:
         d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2), fill=(255, 255, 255, 255))
         d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2), outline=(70, 50, 35, 255), width=2)
 
-        pupil_r = int(size * 0.018)
+        pupil_r = int(size * 0.018 * eye_scale)
         px = ex + int(look_x * eye_w * 0.20) if blink <= 0.2 else ex
         py = ey + int(look_y * eye_h * 0.12) if blink <= 0.2 else ey
 
@@ -141,14 +174,27 @@ def draw_peanut_character(
         hr = max(1, pupil_r // 3)
         d.ellipse((px - hr + 2, py - hr - 2, px + hr + 2, py + hr - 2), fill=(255, 255, 255, 180))
 
-    draw_eye(cx - eye_dx, eye_y)
+        # Eyebrow
+        if abs(brow_tilt) > 0.5 or abs(brow_angle) > 0.5:
+            brow_y = ey - eh // 2 - int(size * 0.02) + brow_offset_y
+            brow_hw = eye_w // 2 + int(size * 0.02)
+            tilt = brow_tilt + brow_angle
+            tilt_px = int(math.sin(math.radians(tilt)) * brow_hw * 0.4)
+            d.line(
+                [(ex - brow_hw, brow_y - tilt_px), (ex + brow_hw, brow_y + tilt_px)],
+                fill=(80, 50, 30, 255), width=max(2, int(size * 0.008)),
+            )
+
+    # Left eye: for "confused", raise left brow (negative tilt)
+    left_brow_tilt = -brow_angle if emotion == "confused" else 0.0
+    draw_eye(cx - eye_dx, eye_y, brow_tilt=left_brow_tilt)
     draw_eye(cx + eye_dx, eye_y)
 
-    # Mouth
+    # Mouth (scaled by emotion)
     mouth_cx = cx
     mouth_cy = cy + int(size * 0.18)
-    mw = int(size * 0.22)
-    mh = int(size * 0.10 * mouth_open)
+    mw = int(size * 0.22 * extra_mouth_scale)
+    mh = int(size * 0.10 * mouth_open * extra_mouth_scale)
 
     if mouth_open < 0.25:
         arc_box = (mouth_cx - mw // 2, mouth_cy - int(size * 0.02),
@@ -170,7 +216,7 @@ def draw_peanut_character(
     # Cheek blush
     blush = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     bd = ImageDraw.Draw(blush)
-    blush_alpha = int(60 + 30 * math.sin(2 * math.pi * 0.5 * t + 0.8))
+    blush_alpha = int(60 + blush_boost + 30 * math.sin(2 * math.pi * 0.5 * t + 0.8))
     blush_color = (255, 120, 140, _clamp(blush_alpha, 20, 110))
     for sign in (-1, 1):
         bx = cx + sign * int(size * 0.18)
