@@ -33,7 +33,8 @@ from peanut_reacts.character.sync import (
     word_timings_to_speech_events,
 )
 from peanut_reacts.character.tts import EdgeTTSEngine, TTSConfig, TTSResult
-from peanut_reacts.core.ffmpeg import get_video_duration
+from peanut_reacts.compositing.layout import FacecamPosition, LayoutConfig
+from peanut_reacts.core.ffmpeg import get_video_dimensions, get_video_duration
 from peanut_reacts.core.srt import parse_srt
 from peanut_reacts.core.transcription import transcribe_video
 
@@ -68,10 +69,8 @@ class ReactionJob:
     peanut_char_size: int = 420
     peanut_seed: int = 0
 
-    # Compositing
-    peanut_scale: float = 0.20
-    peanut_x: str = "W-w-20"
-    peanut_y: str = "H-h-20"
+    # Compositing layout
+    layout: LayoutConfig = field(default_factory=LayoutConfig)
     reaction_volume: float = 0.85
     original_duck: float = 0.4
 
@@ -170,59 +169,143 @@ def _final_composite(
     reaction_audio: Path,
     output_path: Path,
     *,
-    peanut_x: str = "W-w-20",
-    peanut_y: str = "H-h-20",
+    layout: LayoutConfig | None = None,
+    video_width: int = 1920,
+    video_height: int = 1080,
     original_duck: float = 0.4,
     reaction_volume: float = 0.85,
 ) -> Path:
-    """Final ffmpeg pass: overlay peanut segments + mix audio."""
-    inputs = ["-i", str(original_video)]
+    """Final ffmpeg pass: facecam-style overlay + speech text + audio mixing.
 
-    # Add each peanut WebM as an input
+    Layout inspired by popular reaction video formats:
+    - Peanut character in a bordered PiP frame (like a webcam feed)
+    - Name tag below the character
+    - Speech text near the facecam
+    - Audio ducking when peanut speaks
+    """
+    layout = layout or LayoutConfig()
+    vw, vh = video_width, video_height
+
+    # ── Pre-compute pixel coordinates ────────────────────────────────
+    fc_size = int(vw * layout.facecam_scale)  # facecam box size (square)
+    fc_size = fc_size if fc_size % 2 == 0 else fc_size + 1  # ensure even
+    m = layout.facecam_margin
+    pos = layout.facecam_position
+
+    if pos == FacecamPosition.BOTTOM_RIGHT:
+        fc_x, fc_y = vw - fc_size - m, vh - fc_size - m
+    elif pos == FacecamPosition.TOP_RIGHT:
+        fc_x, fc_y = vw - fc_size - m, m
+    elif pos == FacecamPosition.TOP_LEFT:
+        fc_x, fc_y = m, m
+    else:  # BOTTOM_LEFT
+        fc_x, fc_y = m, vh - fc_size - m
+
+    inputs = ["-i", str(original_video)]
     for _, webm_path in peanut_segments:
         inputs.extend(["-i", str(webm_path)])
-
     inputs.extend(["-i", str(reaction_audio)])
 
-    # Build video overlay chain
     n_segments = len(peanut_segments)
-    reaction_audio_idx = n_segments + 1  # 0 = original, 1..N = peanut, N+1 = reaction audio
+    reaction_audio_idx = n_segments + 1
 
     video_filters: list[str] = []
     prev_label = "0:v"
 
+    # ── Draw facecam background frame (always visible) ───────────────
+    video_filters.append(
+        f"[{prev_label}]drawbox="
+        f"x={fc_x}:y={fc_y}:w={fc_size}:h={fc_size}:"
+        f"color={layout.facecam_bg_color}:t=fill[bg0]",
+    )
+    prev_label = "bg0"
+
+    # Border
+    video_filters.append(
+        f"[{prev_label}]drawbox="
+        f"x={fc_x}:y={fc_y}:w={fc_size}:h={fc_size}:"
+        f"color={layout.facecam_border_color}:t={layout.facecam_border_width}[frame0]",
+    )
+    prev_label = "frame0"
+
+    # ── Name tag at bottom of facecam frame ──────────────────────────
+    if layout.name_tag_enabled:
+        tag_text = layout.name_tag_text.replace("'", "\u2019").replace(":", "\\:")
+        # Center the tag horizontally within the facecam box
+        tag_center_x = fc_x + fc_size // 2
+        tag_y = fc_y + fc_size - layout.name_tag_font_size - 10
+
+        video_filters.append(
+            f"[{prev_label}]drawtext="
+            f"text='{tag_text}':"
+            f"fontsize={layout.name_tag_font_size}:fontcolor={layout.name_tag_font_color}:"
+            f"borderw=1:bordercolor=black:"
+            f"box=1:boxcolor={layout.name_tag_bg_color}:boxborderw=6:"
+            f"x={tag_center_x}-tw/2:y={tag_y}[nametag]",
+        )
+        prev_label = "nametag"
+
+    # ── Overlay peanut segments (with colorkey + scale) ──────────────
     for i, (line, _) in enumerate(peanut_segments):
         input_idx = i + 1
         out_label = f"v{i}"
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
-        # Apply colorkey to remove green-screen background, then overlay
+
+        # Scale peanut to fit facecam box, then remove green screen
         video_filters.append(
-            f"[{input_idx}:v]colorkey=0x00FF00:0.3:0.2[ck{i}]",
+            f"[{input_idx}:v]scale={fc_size}:{fc_size},"
+            f"colorkey=0x00FF00:0.3:0.2[ck{i}]",
         )
         video_filters.append(
-            f"[{prev_label}][ck{i}]overlay=x={peanut_x}:y={peanut_y}"
+            f"[{prev_label}][ck{i}]overlay=x={fc_x}:y={fc_y}"
             f":enable='{enable}'[{out_label}]",
         )
         prev_label = out_label
 
-    # Add speech bubble text for each reaction line
+    # ── Speech text (subtitle style near facecam) ────────────────────
     for i, (line, _) in enumerate(peanut_segments):
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
-        # Escape text for ffmpeg drawtext (colons, quotes, backslashes)
-        safe_text = line.text.replace("\\", "\\\\").replace("'", "\u2019").replace(":", "\\:").replace("%", "%%")
+        safe_text = (
+            line.text
+            .replace("\\", "\\\\")
+            .replace("'", "\u2019")
+            .replace(":", "\\:")
+            .replace("%", "%%")
+        )
         out_label = f"t{i}"
+
+        if layout.speech_position == "bottom_center":
+            speech_x = "(w-tw)/2"
+            speech_y = str(vh - 60)
+        else:
+            # Center text horizontally within the facecam column
+            speech_center_x = fc_x + fc_size // 2
+            speech_x = f"{speech_center_x}-tw/2"
+            if pos in (FacecamPosition.BOTTOM_RIGHT, FacecamPosition.BOTTOM_LEFT):
+                speech_y = str(fc_y - 40)  # above facecam
+            else:
+                speech_y = str(fc_y + fc_size + 15)  # below facecam
+
+        box_opts = ""
+        if layout.speech_bg_enabled:
+            box_opts = f"box=1:boxcolor={layout.speech_bg_color}:boxborderw=8:"
+
         video_filters.append(
             f"[{prev_label}]drawtext="
             f"text='{safe_text}':"
-            f"fontsize=28:fontcolor=white:borderw=3:bordercolor=black:"
-            f"x=(w-tw)/2:y=h-80:"
+            f"fontsize={layout.speech_font_size}:"
+            f"fontcolor={layout.speech_font_color}:"
+            f"borderw={layout.speech_border_width}:"
+            f"bordercolor={layout.speech_border_color}:"
+            f"{box_opts}"
+            f"x={speech_x}:y={speech_y}:"
             f"enable='{enable}'[{out_label}]",
         )
         prev_label = out_label
 
     final_video_label = prev_label if video_filters else "0:v"
 
-    # Audio mixing with ducking
+    # ── Audio mixing with ducking ────────────────────────────────────
     lines = [line for line, _ in peanut_segments]
     duck_expr = _build_ducking_expr(lines)
 
@@ -321,7 +404,8 @@ class ReactionPipeline:
         self._log.info("Working directory: %s", work_dir)
 
         video_duration = get_video_duration(job.video_path)
-        self._log.info("Video duration: %.1fs", video_duration)
+        video_w, video_h = get_video_dimensions(job.video_path)
+        self._log.info("Video: %dx%d, %.1fs", video_w, video_h, video_duration)
 
         # Step 1: Load transcript
         transcript = self._load_transcript(job)
@@ -408,15 +492,16 @@ class ReactionPipeline:
         reaction_audio = work_dir / "reaction_audio.aac"
         _build_reaction_audio(tts_pairs, video_duration, reaction_audio)
 
-        # Step 7: Final composite
+        # Step 7: Final composite with facecam layout
         job.output_path.parent.mkdir(parents=True, exist_ok=True)
         _final_composite(
             job.video_path,
             peanut_segments,
             reaction_audio,
             job.output_path,
-            peanut_x=job.peanut_x,
-            peanut_y=job.peanut_y,
+            layout=job.layout,
+            video_width=video_w,
+            video_height=video_h,
             original_duck=job.original_duck,
             reaction_volume=job.reaction_volume,
         )

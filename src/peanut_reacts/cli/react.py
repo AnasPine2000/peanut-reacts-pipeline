@@ -14,6 +14,7 @@ from pathlib import Path
 
 from peanut_reacts.character.reaction_generator import LLMConfig
 from peanut_reacts.character.tts import TTSConfig
+from peanut_reacts.compositing.layout import FacecamPosition, LayoutConfig
 from peanut_reacts.compositing.reaction_video import ReactionJob, ReactionPipeline
 from peanut_reacts.core.logging_setup import build_logger
 
@@ -43,11 +44,16 @@ def _parse_args() -> argparse.Namespace:
     cmt.add_argument("--info-json", default=None, help="Path to .info.json with comments")
     cmt.add_argument("--no-comments", action="store_true", help="Skip comment analysis")
 
-    # Peanut rendering
-    pnt = p.add_argument_group("Peanut options")
-    pnt.add_argument("--peanut-scale", type=float, default=0.20, help="Peanut size as fraction of video width")
-    pnt.add_argument("--peanut-position", default="bottom-right",
+    # Layout options
+    lay = p.add_argument_group("Layout options")
+    lay.add_argument("--facecam-scale", type=float, default=0.22, help="Facecam size as fraction of video width")
+    lay.add_argument("--facecam-position", default="bottom-right",
                      choices=["bottom-right", "bottom-left", "top-right", "top-left"])
+    lay.add_argument("--facecam-border-color", default="white", help="Facecam border color")
+    lay.add_argument("--name-tag", default="PEANUT", help="Name tag text (empty to disable)")
+    lay.add_argument("--speech-position", default="below_facecam",
+                     choices=["below_facecam", "bottom_center"],
+                     help="Where to show speech text")
 
     # Transcript
     p.add_argument("--transcript", default=None, help="Path to transcript JSON or SRT")
@@ -60,11 +66,11 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-_POSITION_MAP = {
-    "bottom-right": ("W-w-20", "H-h-20"),
-    "bottom-left": ("20", "H-h-20"),
-    "top-right": ("W-w-20", "20"),
-    "top-left": ("20", "20"),
+_FACECAM_POSITION_MAP = {
+    "bottom-right": FacecamPosition.BOTTOM_RIGHT,
+    "bottom-left": FacecamPosition.BOTTOM_LEFT,
+    "top-right": FacecamPosition.TOP_RIGHT,
+    "top-left": FacecamPosition.TOP_LEFT,
 }
 
 
@@ -126,7 +132,14 @@ def main() -> int:
     else:
         output_path = video_path.with_name(f"{video_path.stem}_peanut_reacts.mp4")
 
-    peanut_x, peanut_y = _POSITION_MAP.get(args.peanut_position, ("W-w-20", "H-h-20"))
+    layout = LayoutConfig(
+        facecam_position=_FACECAM_POSITION_MAP.get(args.facecam_position, FacecamPosition.BOTTOM_RIGHT),
+        facecam_scale=args.facecam_scale,
+        facecam_border_color=args.facecam_border_color,
+        name_tag_enabled=bool(args.name_tag),
+        name_tag_text=args.name_tag or "PEANUT",
+        speech_position=args.speech_position,
+    )
 
     llm_config = LLMConfig(
         provider=args.provider,
@@ -151,9 +164,7 @@ def main() -> int:
         llm_config=llm_config,
         max_reactions=args.max_reactions,
         tts_config=tts_config,
-        peanut_scale=args.peanut_scale,
-        peanut_x=peanut_x,
-        peanut_y=peanut_y,
+        layout=layout,
         transcript_path=transcript_path,
         whisper_model=args.whisper_model,
         whisper_device=args.whisper_device,

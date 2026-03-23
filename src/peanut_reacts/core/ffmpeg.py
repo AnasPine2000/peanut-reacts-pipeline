@@ -21,6 +21,20 @@ logger = logging.getLogger(__name__)
 # Queries
 # ---------------------------------------------------------------------------
 
+def get_video_dimensions(video_path: Path) -> tuple[int, int]:
+    """Return (width, height) of a video file using ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "csv=s=x:p=0",
+        str(video_path),
+    ]
+    output = subprocess.check_output(cmd, stderr=subprocess.PIPE).decode().strip()
+    w, h = output.split("x")
+    return int(w), int(h)
+
+
 def get_video_duration(video_path: Path) -> float:
     """Return the duration (in seconds) of a video file using ffprobe."""
     cmd = [
