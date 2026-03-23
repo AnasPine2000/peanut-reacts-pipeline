@@ -124,7 +124,7 @@ def _download_video(url: str, dl_dir: Path, log, cookies_file: str = "") -> Path
     dl_dir.mkdir(parents=True, exist_ok=True)
 
     ydl_opts = {
-        "format": "bestvideo+bestaudio/best",
+        "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "merge_output_format": "mp4",
         "outtmpl": str(dl_dir / "%(title)s.%(ext)s"),
         "writesubtitles": True,
@@ -134,6 +134,7 @@ def _download_video(url: str, dl_dir: Path, log, cookies_file: str = "") -> Path
         "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "srt"}],
         "windowsfilenames": True,
         "ignoreerrors": True,
+        "remote_components": ["ejs:github"],  # required for YouTube JS challenges
     }
 
     if cookies_file and Path(cookies_file).exists():
