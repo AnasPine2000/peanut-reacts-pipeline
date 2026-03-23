@@ -35,6 +35,8 @@ class VideoProgress:
     reactions_generated: int = 0
     started_at: str = ""
     completed_at: str = ""
+    uploaded: bool = False
+    youtube_url: str = ""
 
 
 class ProgressTracker:
@@ -115,6 +117,16 @@ class ProgressTracker:
         p.completed_at = datetime.now(timezone.utc).isoformat()
         self._save()
         logger.info("Progress: %s marked complete → %s", video_id, output_path)
+
+    def mark_uploaded(self, video_id: str, youtube_url: str) -> None:
+        """Mark a video as uploaded to YouTube."""
+        p = self._data.get(video_id)
+        if not p:
+            return
+        p.uploaded = True
+        p.youtube_url = youtube_url
+        self._save()
+        logger.info("Progress: %s uploaded → %s", video_id, youtube_url)
 
     def fail(self, video_id: str, error: str, step: str = "") -> None:
         """Mark a video as failed."""

@@ -39,6 +39,9 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--max-reactions", type=int, default=0)
     p.add_argument("--max-comments", type=int, default=0)
     p.add_argument("--facecam-scale", type=float, default=0)
+    p.add_argument("--no-upload", action="store_true", help="Skip YouTube upload after generation")
+    p.add_argument("--upload-privacy", default="", help="Upload privacy (private|unlisted|public)")
+    p.add_argument("--client-secrets", default=None, help="OAuth client_secret.json path")
     p.add_argument("--work-dir", default=None)
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
@@ -192,6 +195,14 @@ def main() -> int:
         extra_args.extend(["--max-comments", str(args.max_comments)])
     if args.facecam_scale:
         extra_args.extend(["--facecam-scale", str(args.facecam_scale)])
+
+    # Upload flags (pass through to peanut-react)
+    if not args.no_upload and cfg.auto_upload:
+        extra_args.append("--upload")
+    if args.upload_privacy:
+        extra_args.extend(["--upload-privacy", args.upload_privacy])
+    if args.client_secrets:
+        extra_args.extend(["--client-secrets", args.client_secrets])
 
     # ── Process each video ───────────────────────────────────────────
     results = {"success": 0, "failed": 0, "skipped": skipped}

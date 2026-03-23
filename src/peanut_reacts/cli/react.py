@@ -65,6 +65,14 @@ def _parse_args() -> argparse.Namespace:
     dl.add_argument("--cookies-file", default=None,
                     help="Path to cookies.txt for yt-dlp (or set YTDLP_COOKIES_FILE in .env)")
 
+    # Upload options
+    up = p.add_argument_group("Upload options")
+    up.add_argument("--upload", action="store_true", help="Upload to YouTube after generation")
+    up.add_argument("--upload-privacy", default="",
+                    help="Upload privacy: private|unlisted|public (default from config)")
+    up.add_argument("--client-secrets", default=None,
+                    help="Path to OAuth client_secret.json (or set YOUTUBE_CLIENT_SECRETS in .env)")
+
     # Layout options
     lay = p.add_argument_group("Layout options")
     lay.add_argument("--facecam-scale", type=float, default=0.22,
@@ -287,7 +295,6 @@ def main() -> int:
         result = pipeline.run(job)
         tracker.complete(video_id, str(result))
         log.info("Done! Output: %s", result)
-        return 0
     except Exception as e:
         tracker.fail(video_id, str(e), step="pipeline")
         log.error("Pipeline failed: %s", e)
@@ -295,6 +302,65 @@ def main() -> int:
             import traceback
             traceback.print_exc()
         return 1
+
+    # ── Upload to YouTube (if requested) ─────────────────────────────
+    if args.upload or cfg.auto_upload:
+        client_secrets = args.client_secrets or cfg.youtube_client_secrets
+        if not client_secrets:
+            log.warning("--upload requested but no client secrets configured. Skipping upload.")
+            return 0
+
+        tracker.update_step(video_id, "uploading")
+        try:
+            from peanut_reacts.upload.youtube_auth import get_authenticated_service
+            from peanut_reacts.upload.youtube_upload import UploadMetadata, YouTubeUploader
+            from peanut_reacts.character.metadata_generator import generate_metadata
+            from peanut_reacts.character.reaction_generator import create_llm_provider
+            from peanut_reacts.compositing.thumbnail import generate_thumbnail
+            from peanut_reacts.core.ffmpeg import get_video_duration
+
+            # Generate metadata
+            llm = create_llm_provider(llm_config)
+            original_title = video_path.stem.replace("_peanut_reacts", "")
+            meta = generate_metadata(llm, original_title=original_title)
+            log.info("Upload title: %s", meta.title)
+
+            # Generate thumbnail
+            thumb_path = Path(result).with_suffix(".thumb.jpg")
+            try:
+                duration = get_video_duration(Path(result))
+                generate_thumbnail(
+                    Path(result), thumb_path,
+                    title_text=meta.title, video_duration=duration,
+                )
+            except Exception as e:
+                log.warning("Thumbnail failed (skipping): %s", e)
+                thumb_path = None
+
+            # Upload
+            privacy = args.upload_privacy or cfg.upload_privacy or "private"
+            metadata = UploadMetadata(
+                title=meta.title,
+                description=meta.description,
+                tags=meta.tags,
+                privacy_status=privacy,
+                thumbnail_path=thumb_path,
+            )
+
+            service = get_authenticated_service(client_secrets)
+            uploader = YouTubeUploader(service)
+            upload_result = uploader.upload_video(Path(result), metadata)
+
+            tracker.mark_uploaded(video_id, upload_result.url)
+            log.info("Uploaded! %s", upload_result.url)
+
+        except Exception as e:
+            log.error("Upload failed: %s", e)
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+
+    return 0
 
 
 if __name__ == "__main__":

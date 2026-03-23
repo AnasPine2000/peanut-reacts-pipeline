@@ -85,13 +85,9 @@ class YouTubeCommentFetcher:
 
     @classmethod
     def from_oauth(cls, client_secrets_path: str | Path) -> YouTubeCommentFetcher:
-        """Create a fetcher using OAuth 2.0 (for higher quotas)."""
-        from google_auth_oauthlib.flow import InstalledAppFlow
-
-        scopes = ["https://www.googleapis.com/auth/youtube.force-ssl"]
-        flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets_path), scopes)
-        credentials = flow.run_local_server(port=0)
-        service = build("youtube", "v3", credentials=credentials)
+        """Create a fetcher using OAuth 2.0 (shared token with upload module)."""
+        from peanut_reacts.upload.youtube_auth import get_authenticated_service
+        service = get_authenticated_service(client_secrets_path)
         return cls(service)
 
     @retry(max_attempts=3, delay=2.0, exceptions=(HttpError, ConnectionError, TimeoutError))

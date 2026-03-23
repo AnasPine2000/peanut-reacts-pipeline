@@ -97,6 +97,11 @@ class PeanutConfig:
     facecam_position: str = "bottom-right"
     name_tag: str = "PEANUT"
 
+    # Upload
+    youtube_client_secrets: str = ""
+    upload_privacy: str = "private"
+    auto_upload: bool = False
+
     # Download
     cookies_file: str = ""
     output_dir: str = "downloads"
@@ -175,6 +180,11 @@ def load_config(config_dir: Optional[Path] = None) -> PeanutConfig:
     cfg.facecam_scale = _get_float("FACECAM_SCALE", "facecam_scale", 0.22)
     cfg.facecam_position = _get("FACECAM_POSITION", "facecam_position", "bottom-right")
     cfg.name_tag = _get("NAME_TAG", "name_tag", "PEANUT")
+
+    cfg.youtube_client_secrets = _get("YOUTUBE_CLIENT_SECRETS", "youtube_client_secrets", "")
+    cfg.upload_privacy = _get("UPLOAD_PRIVACY", "upload_privacy", "private")
+    _auto = _get("AUTO_UPLOAD", "auto_upload", "false")
+    cfg.auto_upload = _auto.lower() in ("true", "1", "yes")
 
     cfg.cookies_file = _get("YTDLP_COOKIES_FILE", "cookies_file", "")
     cfg.output_dir = _get("OUTPUT_DIR", "output_dir", "downloads")
