@@ -72,7 +72,7 @@ class ReactionJob:
     # Compositing layout
     layout: LayoutConfig = field(default_factory=LayoutConfig)
     reaction_volume: float = 0.85
-    original_duck: float = 0.4
+    original_duck: float = 0.25  # reduce original to 25% when peanut speaks
 
     # Transcript
     transcript_path: Optional[Path] = None
@@ -361,10 +361,16 @@ def _final_composite(
 
     audio_filters: list[str] = []
     if duck_expr:
+        # Duck original audio during peanut speech (reduce to 20%)
         audio_filters.append(
             f"[0:a]volume={original_duck}:enable='{duck_expr}'[orig_a]",
         )
-        audio_filters.append(f"[{reaction_audio_idx}:a]volume={reaction_volume}[react_a]")
+        # Boost reaction TTS audio significantly (TTS is much quieter than video audio)
+        # volume=6.0 compensates for amix normalization (which halves both inputs)
+        audio_filters.append(
+            f"[{reaction_audio_idx}:a]volume=6.0[react_a]",
+        )
+        # amix halves each input by default (weights=1 1), so we double everything
         audio_filters.append(
             "[orig_a][react_a]amix=inputs=2:duration=first:dropout_transition=2[aout]",
         )
