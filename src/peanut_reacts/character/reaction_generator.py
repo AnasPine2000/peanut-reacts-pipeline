@@ -228,12 +228,12 @@ Rules:
 def _compress_transcript(
     transcript: list[dict],
     highlights: list[CommentHighlight],
-    max_chars: int = 6000,
+    max_chars: int = 10000,
 ) -> str:
     """Compress transcript to fit token limits.
 
-    Includes full context (30s window) around highlights and every 5th
-    segment elsewhere.
+    Includes full context (30s window) around highlights and every 3rd
+    segment elsewhere. Higher max_chars allows more context for denser reactions.
     """
     highlight_times = {h.time for h in highlights}
 
@@ -249,7 +249,8 @@ def _compress_transcript(
     lines: list[str] = []
     total_chars = 0
     for i, seg in enumerate(important_segments):
-        if seg["_important"] or i % 5 == 0:
+        # Include important segments + every 3rd segment for better coverage
+        if seg["_important"] or i % 3 == 0:
             line = f"[{seg['start']:.1f}s] {seg['text'].strip()}"
             if total_chars + len(line) > max_chars:
                 lines.append("... (transcript truncated)")

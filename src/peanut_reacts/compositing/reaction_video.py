@@ -454,6 +454,100 @@ class ReactionPipeline:
             device=job.whisper_device,
         )
 
+    def _fill_gaps(
+        self,
+        script_lines: list,
+        transcript: list[dict],
+        llm,
+        video_duration: float,
+        video_title: str,
+        max_gap: float = 25.0,
+    ) -> list:
+        """Detect silent gaps > max_gap seconds and generate filler reactions.
+
+        Makes a second LLM call specifically targeting the gap regions,
+        using transcript segments from those time ranges for context.
+        """
+        if not script_lines:
+            return script_lines
+
+        # Find gaps
+        gaps: list[tuple[float, float]] = []
+        prev_end = 0.0
+        for line in script_lines:
+            if line.start - prev_end > max_gap:
+                gaps.append((prev_end + 2.0, line.start - 2.0))
+            prev_end = max(prev_end, line.end)
+        # Check gap at end of video
+        if video_duration - prev_end > max_gap:
+            gaps.append((prev_end + 2.0, video_duration - 2.0))
+
+        if not gaps:
+            self._log.info("No significant gaps found.")
+            return script_lines
+
+        self._log.info("Found %d gap(s) to fill: %s",
+                        len(gaps),
+                        ", ".join(f"{s:.0f}-{e:.0f}s" for s, e in gaps))
+
+        # Build context from transcript segments in gap regions
+        gap_transcript = []
+        for seg in transcript:
+            seg_start = float(seg.get("start", 0))
+            for gap_start, gap_end in gaps:
+                if gap_start <= seg_start <= gap_end:
+                    gap_transcript.append(seg)
+                    break
+
+        if not gap_transcript:
+            return script_lines
+
+        # Build a focused prompt for gap filling
+        gap_context = "\n".join(
+            f"[{seg['start']:.1f}s] {seg.get('text', '').strip()}"
+            for seg in gap_transcript[:40]
+        )
+
+        gap_ranges = ", ".join(f"{s:.0f}s-{e:.0f}s" for s, e in gaps)
+        prompt = (
+            f'VIDEO: "{video_title}"\n\n'
+            f"The following time ranges need reactions (currently silent):\n"
+            f"{gap_ranges}\n\n"
+            f"TRANSCRIPT for these sections:\n{gap_context}\n\n"
+            f"Generate 1-2 short reactions for EACH gap listed above. "
+            f"Place reactions in the MIDDLE of each gap."
+        )
+
+        from peanut_reacts.character.reaction_generator import (
+            _SYSTEM_PROMPT, _parse_llm_response, ReactionLine,
+        )
+
+        messages = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+
+        try:
+            response = llm.complete(messages)
+            filler_lines = _parse_llm_response(response, video_duration)
+            self._log.info("Gap-fill generated %d additional reaction(s).", len(filler_lines))
+
+            # Merge and re-sort
+            all_lines = list(script_lines) + filler_lines
+            all_lines.sort(key=lambda l: l.start)
+
+            # Remove any that overlap with existing reactions
+            filtered: list[ReactionLine] = []
+            for line in all_lines:
+                if filtered and line.start < filtered[-1].end + 2.0:
+                    continue
+                filtered.append(line)
+
+            return filtered
+        except Exception as e:
+            self._log.warning("Gap-fill failed (continuing without): %s", e)
+            return script_lines
+
     def _find_info_json(self, job: ReactionJob) -> Optional[Path]:
         """Find the yt-dlp info.json file."""
         if job.info_json_path and job.info_json_path.exists():
@@ -508,6 +602,23 @@ class ReactionPipeline:
         if not script.lines:
             self._log.warning("No reactions generated. Returning original video.")
             return job.video_path
+
+        # Step 3b: Fill gaps — generate additional reactions for silent stretches
+        filled_lines = self._fill_gaps(
+            script.lines, transcript, llm,
+            video_duration, job.video_path.stem,
+        )
+        if len(filled_lines) > len(script.lines):
+            self._log.info(
+                "Gap-fill: %d → %d reactions (added %d)",
+                len(script.lines), len(filled_lines),
+                len(filled_lines) - len(script.lines),
+            )
+            script = ReactionScript(
+                lines=filled_lines[:job.max_reactions],
+                video_title=script.video_title,
+                generated_by=script.generated_by,
+            )
 
         # Save script for reference
         script_path = work_dir / "reaction_script.json"
