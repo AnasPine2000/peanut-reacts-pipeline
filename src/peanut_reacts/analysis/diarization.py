@@ -104,10 +104,17 @@ def diarize_video(
 
     # Load diarization pipeline
     logger.info("Loading pyannote diarization model ...")
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1",
-        use_auth_token=token,
-    )
+    try:
+        pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization-3.1",
+            token=token,
+        )
+    except TypeError:
+        # Older pyannote versions use use_auth_token
+        pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization-3.1",
+            use_auth_token=token,
+        )
 
     # Run diarization
     logger.info("Running speaker diarization (this may take a few minutes) ...")
@@ -118,7 +125,13 @@ def diarize_video(
         kwargs["min_speakers"] = min_speakers
         kwargs["max_speakers"] = max_speakers
 
-    diarization = pipeline(str(wav_path), **kwargs)
+    raw_output = pipeline(str(wav_path), **kwargs)
+
+    # pyannote 4.x returns DiarizeOutput; extract the Annotation object
+    if hasattr(raw_output, "speaker_diarization"):
+        diarization = raw_output.speaker_diarization
+    else:
+        diarization = raw_output  # older versions return Annotation directly
 
     # Parse results
     speaker_map: dict[str, int] = {}
