@@ -66,29 +66,62 @@ def draw_peanut_character(
     outline = (120, 80, 45, 255)
     highlight = (255, 235, 200, 110)
 
-    # Emotion-specific modifiers
-    eye_scale = 1.0
-    brow_angle = 0.0  # degrees, positive = angry
-    brow_offset_y = 0  # pixels up/down
-    blush_boost = 0
-    extra_mouth_scale = 1.0
+    # Emotion-specific modifiers — each emotion has a distinct visual signature
+    eye_scale = 1.0           # eye size multiplier
+    brow_show = False         # whether to draw eyebrows
+    brow_left_angle = 0.0     # left eyebrow tilt (degrees)
+    brow_right_angle = 0.0    # right eyebrow tilt (degrees)
+    brow_offset_y = 0         # eyebrow vertical offset
+    blush_boost = 0           # extra blush intensity
+    extra_mouth_scale = 1.0   # mouth width/height multiplier
+    mouth_style = "default"   # "default", "smirk", "frown", "grin", "O", "flat"
+    pupil_size_mult = 1.0     # pupil size multiplier
 
     if emotion in ("excited",):
-        eye_scale = 1.3
-        blush_boost = 30
-        extra_mouth_scale = 1.2
+        eye_scale = 1.35
+        blush_boost = 40
+        extra_mouth_scale = 1.3
+        mouth_style = "grin"
+        brow_show = True
+        brow_left_angle = -10.0   # raised brows
+        brow_right_angle = -10.0
+        pupil_size_mult = 0.8     # sparkly small pupils
     elif emotion in ("shocked",):
-        eye_scale = 1.5
-        extra_mouth_scale = 1.4
-    elif emotion in ("amused", "sarcastic"):
+        eye_scale = 1.6
+        extra_mouth_scale = 1.5
+        mouth_style = "O"
+        brow_show = True
+        brow_left_angle = -15.0   # very raised
+        brow_right_angle = -15.0
+        pupil_size_mult = 0.6     # tiny shocked pupils
+    elif emotion in ("amused",):
         eye_scale = 0.85
-        blush_boost = 20
+        blush_boost = 25
+        extra_mouth_scale = 1.1
+        mouth_style = "smirk"
+        brow_show = True
+        brow_left_angle = -5.0
+        brow_right_angle = -5.0
+    elif emotion in ("sarcastic",):
+        eye_scale = 0.75          # half-lidded
+        mouth_style = "smirk"
+        brow_show = True
+        brow_left_angle = 8.0     # one brow raised
+        brow_right_angle = -8.0
     elif emotion in ("confused",):
-        eye_scale = 0.9
-        brow_angle = -8.0  # one brow up
+        eye_scale = 1.1
+        mouth_style = "flat"
+        brow_show = True
+        brow_left_angle = -12.0   # one brow up
+        brow_right_angle = 6.0    # one brow down
+        pupil_size_mult = 1.2
     elif emotion in ("angry",):
-        brow_angle = 12.0
-        brow_offset_y = -int(size * 0.01)
+        eye_scale = 0.9
+        mouth_style = "frown"
+        brow_show = True
+        brow_left_angle = 15.0    # furrowed
+        brow_right_angle = 15.0
+        brow_offset_y = -int(size * 0.015)
 
     cx, cy = size // 2, size // 2
 
@@ -162,56 +195,122 @@ def draw_peanut_character(
     blink_factor = _lerp(1.0, 0.12, blink)
     eh = max(2, int(eye_h * blink_factor))
 
-    def draw_eye(ex: int, ey: int, brow_tilt: float = 0.0) -> None:
-        d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2), fill=(255, 255, 255, 255))
-        d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2), outline=(70, 50, 35, 255), width=2)
+    def draw_eye(ex: int, ey: int, brow_tilt_deg: float = 0.0) -> None:
+        # Eye white
+        d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2),
+                   fill=(255, 255, 255, 255))
+        d.ellipse((ex - eye_w // 2, ey - eh // 2, ex + eye_w // 2, ey + eh // 2),
+                   outline=(70, 50, 35, 255), width=2)
 
-        pupil_r = int(size * 0.018 * eye_scale)
+        # Pupil (size varies by emotion)
+        pupil_r = max(2, int(size * 0.018 * eye_scale * pupil_size_mult))
         px = ex + int(look_x * eye_w * 0.20) if blink <= 0.2 else ex
         py = ey + int(look_y * eye_h * 0.12) if blink <= 0.2 else ey
 
-        d.ellipse((px - pupil_r, py - pupil_r, px + pupil_r, py + pupil_r), fill=(20, 20, 20, 255))
+        d.ellipse((px - pupil_r, py - pupil_r, px + pupil_r, py + pupil_r),
+                   fill=(20, 20, 20, 255))
+        # Highlight dot
         hr = max(1, pupil_r // 3)
-        d.ellipse((px - hr + 2, py - hr - 2, px + hr + 2, py + hr - 2), fill=(255, 255, 255, 180))
+        d.ellipse((px - hr + 2, py - hr - 2, px + hr + 2, py + hr - 2),
+                   fill=(255, 255, 255, 180))
 
-        # Eyebrow
-        if abs(brow_tilt) > 0.5 or abs(brow_angle) > 0.5:
-            brow_y = ey - eh // 2 - int(size * 0.02) + brow_offset_y
-            brow_hw = eye_w // 2 + int(size * 0.02)
-            tilt = brow_tilt + brow_angle
-            tilt_px = int(math.sin(math.radians(tilt)) * brow_hw * 0.4)
+        # Eyebrow (always drawn if brow_show is True)
+        if brow_show:
+            brow_y = ey - eh // 2 - int(size * 0.025) + brow_offset_y
+            brow_hw = eye_w // 2 + int(size * 0.025)
+            tilt_px = int(math.sin(math.radians(brow_tilt_deg)) * brow_hw * 0.5)
+            brow_thickness = max(3, int(size * 0.012))
             d.line(
                 [(ex - brow_hw, brow_y - tilt_px), (ex + brow_hw, brow_y + tilt_px)],
-                fill=(80, 50, 30, 255), width=max(2, int(size * 0.008)),
+                fill=(80, 50, 30, 255), width=brow_thickness,
             )
 
-    # Left eye: for "confused", raise left brow (negative tilt)
-    left_brow_tilt = -brow_angle if emotion == "confused" else 0.0
-    draw_eye(cx - eye_dx, eye_y, brow_tilt=left_brow_tilt)
-    draw_eye(cx + eye_dx, eye_y)
+    draw_eye(cx - eye_dx, eye_y, brow_tilt_deg=brow_left_angle)
+    draw_eye(cx + eye_dx, eye_y, brow_tilt_deg=brow_right_angle)
 
-    # Mouth (scaled by emotion)
+    # Mouth — different shapes per emotion
     mouth_cx = cx
     mouth_cy = cy + int(size * 0.18)
     mw = int(size * 0.22 * extra_mouth_scale)
     mh = int(size * 0.10 * mouth_open * extra_mouth_scale)
+    mouth_color = (70, 20, 25, 255)
+    mouth_outline = (40, 10, 12, 255)
+    line_w = max(3, int(size * 0.008))
 
     if mouth_open < 0.25:
-        arc_box = (mouth_cx - mw // 2, mouth_cy - int(size * 0.02),
-                   mouth_cx + mw // 2, mouth_cy + int(size * 0.12))
-        d.arc(arc_box, start=200, end=340, fill=(60, 35, 25, 255), width=4)
+        # Closed mouth — shape depends on emotion
+        if mouth_style == "smirk":
+            # Asymmetric upward curve (left side higher)
+            points = [
+                (mouth_cx - mw // 2, mouth_cy + int(size * 0.01)),
+                (mouth_cx - mw // 4, mouth_cy - int(size * 0.02)),
+                (mouth_cx, mouth_cy - int(size * 0.01)),
+                (mouth_cx + mw // 3, mouth_cy - int(size * 0.03)),
+            ]
+            for i in range(len(points) - 1):
+                d.line([points[i], points[i + 1]], fill=(60, 35, 25, 255), width=line_w)
+        elif mouth_style == "grin":
+            # Wide upward smile
+            arc_box = (mouth_cx - int(mw * 0.6), mouth_cy - int(size * 0.04),
+                       mouth_cx + int(mw * 0.6), mouth_cy + int(size * 0.10))
+            d.arc(arc_box, start=190, end=350, fill=(60, 35, 25, 255), width=line_w + 1)
+        elif mouth_style == "frown":
+            # Downward curve
+            arc_box = (mouth_cx - mw // 2, mouth_cy - int(size * 0.06),
+                       mouth_cx + mw // 2, mouth_cy + int(size * 0.06))
+            d.arc(arc_box, start=20, end=160, fill=(60, 35, 25, 255), width=line_w)
+        elif mouth_style == "flat":
+            # Flat line (confused/neutral)
+            d.line(
+                [(mouth_cx - mw // 3, mouth_cy), (mouth_cx + mw // 3, mouth_cy)],
+                fill=(60, 35, 25, 255), width=line_w,
+            )
+        elif mouth_style == "O":
+            # Small round O (surprise even when closed)
+            o_r = int(size * 0.03)
+            d.ellipse(
+                (mouth_cx - o_r, mouth_cy - o_r, mouth_cx + o_r, mouth_cy + o_r),
+                fill=mouth_color, outline=mouth_outline, width=2,
+            )
+        else:
+            # Default: gentle smile arc
+            arc_box = (mouth_cx - mw // 2, mouth_cy - int(size * 0.02),
+                       mouth_cx + mw // 2, mouth_cy + int(size * 0.12))
+            d.arc(arc_box, start=200, end=340, fill=(60, 35, 25, 255), width=line_w)
     else:
-        mouth_box = (mouth_cx - mw // 2, mouth_cy - mh // 2, mouth_cx + mw // 2, mouth_cy + mh // 2)
-        d.ellipse(mouth_box, fill=(70, 20, 25, 255), outline=(40, 10, 12, 255), width=3)
+        # Open mouth — shape varies
+        if mouth_style == "O":
+            # Round open mouth (shocked)
+            o_w = int(mw * 0.65)
+            o_h = max(int(mh * 1.2), int(size * 0.06))
+            mouth_box = (mouth_cx - o_w // 2, mouth_cy - o_h // 2,
+                         mouth_cx + o_w // 2, mouth_cy + o_h // 2)
+            d.ellipse(mouth_box, fill=mouth_color, outline=mouth_outline, width=3)
+        elif mouth_style == "grin":
+            # Wide D-shaped grin
+            mouth_box = (mouth_cx - int(mw * 0.55), mouth_cy - mh // 3,
+                         mouth_cx + int(mw * 0.55), mouth_cy + int(mh * 0.8))
+            d.ellipse(mouth_box, fill=mouth_color, outline=mouth_outline, width=3)
+            # Teeth across top
+            teeth_h = max(3, int(mh * 0.30))
+            teeth_box = (mouth_cx - int(mw * 0.45), mouth_cy - mh // 3 + 3,
+                         mouth_cx + int(mw * 0.45), mouth_cy - mh // 3 + 3 + teeth_h)
+            d.rounded_rectangle(teeth_box, radius=teeth_h // 2, fill=(245, 245, 245, 255))
+        else:
+            # Default open mouth with teeth and tongue
+            mouth_box = (mouth_cx - mw // 2, mouth_cy - mh // 2,
+                         mouth_cx + mw // 2, mouth_cy + mh // 2)
+            d.ellipse(mouth_box, fill=mouth_color, outline=mouth_outline, width=3)
 
-        teeth_h = int(mh * 0.35)
-        teeth_box = (mouth_cx - int(mw * 0.42), mouth_cy - mh // 2 + 3,
-                     mouth_cx + int(mw * 0.42), mouth_cy - mh // 2 + 3 + teeth_h)
-        d.rounded_rectangle(teeth_box, radius=teeth_h // 2, fill=(245, 245, 245, 255))
+            teeth_h = max(3, int(mh * 0.35))
+            teeth_box = (mouth_cx - int(mw * 0.42), mouth_cy - mh // 2 + 3,
+                         mouth_cx + int(mw * 0.42), mouth_cy - mh // 2 + 3 + teeth_h)
+            d.rounded_rectangle(teeth_box, radius=teeth_h // 2, fill=(245, 245, 245, 255))
 
-        tongue_box = (mouth_cx - int(mw * 0.28), mouth_cy + int(mh * 0.05),
-                      mouth_cx + int(mw * 0.28), mouth_cy + int(mh * 0.45))
-        d.ellipse(tongue_box, fill=(170, 60, 80, 200))
+            if mh > int(size * 0.04):
+                tongue_box = (mouth_cx - int(mw * 0.28), mouth_cy + int(mh * 0.05),
+                              mouth_cx + int(mw * 0.28), mouth_cy + int(mh * 0.45))
+                d.ellipse(tongue_box, fill=(170, 60, 80, 200))
 
     # Cheek blush
     blush = Image.new("RGBA", (size, size), (0, 0, 0, 0))
