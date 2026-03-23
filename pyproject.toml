@@ -19,6 +19,8 @@ dependencies = [
     "pydub>=0.25.1",
     "edge-tts>=6.1.0",
     "httpx>=0.25.0",
+    "google-api-python-client>=2.100.0",
+    "google-auth-oauthlib>=1.1.0",
 ]
 
 [project.scripts]
@@ -33,6 +35,7 @@ peanut-render-character = "peanut_reacts.cli.render_character:main"
 peanut-overlay = "peanut_reacts.cli.overlay:main"
 peanut-concat = "peanut_reacts.cli.concat:main"
 peanut-download-comments = "peanut_reacts.cli.download_comments:main"
+peanut-fetch-comments = "peanut_reacts.cli.fetch_comments:main"
 peanut-extract-comments = "peanut_reacts.cli.extract_comments:main"
 peanut-generate-reactions = "peanut_reacts.cli.generate_reactions:main"
 peanut-synthesize-tts = "peanut_reacts.cli.synthesize_tts:main"
