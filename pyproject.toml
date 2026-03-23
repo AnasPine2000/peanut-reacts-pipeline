@@ -41,6 +41,7 @@ peanut-generate-reactions = "peanut_reacts.cli.generate_reactions:main"
 peanut-synthesize-tts = "peanut_reacts.cli.synthesize_tts:main"
 peanut-render-synced = "peanut_reacts.cli.render_synced:main"
 peanut-react = "peanut_reacts.cli.react:main"
+peanut-batch = "peanut_reacts.cli.batch:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

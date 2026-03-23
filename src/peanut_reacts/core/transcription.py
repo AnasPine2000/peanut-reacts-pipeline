@@ -18,11 +18,27 @@ logger = logging.getLogger(__name__)
 
 
 def _load_model(model_name: str = "base", device: str = "cuda") -> Any:
-    """Load a Whisper model (lazy import to avoid import-time GPU init)."""
+    """Load a Whisper model with automatic CPU fallback if CUDA unavailable."""
     import whisper
 
+    if device == "cuda":
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                logger.warning("CUDA not available — falling back to CPU for Whisper.")
+                device = "cpu"
+        except ImportError:
+            logger.warning("PyTorch not found — falling back to CPU for Whisper.")
+            device = "cpu"
+
     logger.info("Loading Whisper model '%s' on %s ...", model_name, device)
-    return whisper.load_model(model_name, device=device)
+    try:
+        return whisper.load_model(model_name, device=device)
+    except RuntimeError as e:
+        if "cuda" in str(e).lower() and device != "cpu":
+            logger.warning("CUDA error loading model, retrying on CPU: %s", e)
+            return whisper.load_model(model_name, device="cpu")
+        raise
 
 
 def extract_transcript(

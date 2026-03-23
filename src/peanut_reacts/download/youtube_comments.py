@@ -25,6 +25,8 @@ from typing import Optional
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from peanut_reacts.core.retry import retry
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,6 +94,7 @@ class YouTubeCommentFetcher:
         service = build("youtube", "v3", credentials=credentials)
         return cls(service)
 
+    @retry(max_attempts=3, delay=2.0, exceptions=(HttpError, ConnectionError, TimeoutError))
     def fetch_video_info(self, video_id: str) -> dict:
         """Fetch basic video metadata (title, duration, etc.)."""
         response = self._yt.videos().list(
