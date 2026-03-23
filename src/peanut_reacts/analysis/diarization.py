@@ -214,20 +214,57 @@ def align_transcript_with_speakers(
     return colored_segments
 
 
+def _merge_consecutive_segments(
+    segments: list[SpeakerSegment],
+    max_gap: float = 0.5,
+) -> list[SpeakerSegment]:
+    """Merge consecutive segments from the same speaker to reduce filter count."""
+    if not segments:
+        return []
+
+    merged: list[SpeakerSegment] = []
+    current = segments[0]
+
+    for seg in segments[1:]:
+        # Merge if same speaker and gap < max_gap
+        if (seg.speaker == current.speaker
+                and seg.start - current.end < max_gap
+                and len(current.text) + len(seg.text) < 80):
+            current = SpeakerSegment(
+                start=current.start,
+                end=seg.end,
+                speaker=current.speaker,
+                speaker_index=current.speaker_index,
+                text=(current.text + " " + seg.text).strip(),
+                color_hex=current.color_hex,
+                color_ffmpeg=current.color_ffmpeg,
+            )
+        else:
+            merged.append(current)
+            current = seg
+
+    merged.append(current)
+    return merged
+
+
 def build_subtitle_filters(
     colored_segments: list[SpeakerSegment],
     *,
     font_size: int = 22,
     y_position: str = "h-50",
-    max_segments: int = 200,
+    max_segments: int = 120,
 ) -> list[str]:
     """Build ffmpeg drawtext filters for color-coded subtitles.
 
-    Returns a list of filter strings to be joined into a filter_complex.
+    Merges consecutive same-speaker segments to reduce filter count
+    and stay within ffmpeg command line limits.
     """
-    filters: list[str] = []
+    # Merge to reduce segment count
+    merged = _merge_consecutive_segments(colored_segments)
+    logger.info("Subtitle segments: %d raw -> %d merged", len(colored_segments), len(merged))
 
-    for i, seg in enumerate(colored_segments[:max_segments]):
+    filters: list[str] = []
+    for seg in merged[:max_segments]:
         safe_text = (
             seg.text
             .replace("\\", "\\\\")
@@ -235,6 +272,10 @@ def build_subtitle_filters(
             .replace(":", "\\:")
             .replace("%", "%%")
         )
+        # Truncate long text
+        if len(safe_text) > 70:
+            safe_text = safe_text[:67] + "..."
+
         enable = f"between(t,{seg.start:.2f},{seg.end:.2f})"
 
         filters.append(
