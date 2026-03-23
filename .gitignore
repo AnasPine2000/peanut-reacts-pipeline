@@ -35,5 +35,14 @@ output_clips/
 Thumbs.db
 .DS_Store
 
+# Secrets and local config
+.env
+cookies.txt
+*.cookies.txt
+peanut_progress.json
+
+# Test artifacts
+test_run/
+
 # Temp files
 *.tmp

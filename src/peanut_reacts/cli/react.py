@@ -21,7 +21,9 @@ from peanut_reacts.character.reaction_generator import LLMConfig
 from peanut_reacts.character.tts import TTSConfig
 from peanut_reacts.compositing.layout import FacecamPosition, LayoutConfig
 from peanut_reacts.compositing.reaction_video import ReactionJob, ReactionPipeline
+from peanut_reacts.core.config import load_config
 from peanut_reacts.core.logging_setup import build_logger
+from peanut_reacts.core.progress import ProgressTracker
 
 
 def _parse_args() -> argparse.Namespace:
@@ -55,8 +57,13 @@ def _parse_args() -> argparse.Namespace:
     cmt.add_argument("--no-comments", action="store_true", help="Skip comment analysis")
     cmt.add_argument("--youtube-api-key", default=None,
                      help="YouTube Data API key (or set YOUTUBE_API_KEY env var)")
-    cmt.add_argument("--max-comments", type=int, default=500,
-                     help="Max comments to fetch via YouTube API (default: 500)")
+    cmt.add_argument("--max-comments", type=int, default=0,
+                     help="Max comments to fetch via YouTube API (default: from config)")
+
+    # Download options
+    dl = p.add_argument_group("Download options")
+    dl.add_argument("--cookies-file", default=None,
+                    help="Path to cookies.txt for yt-dlp (or set YTDLP_COOKIES_FILE in .env)")
 
     # Layout options
     lay = p.add_argument_group("Layout options")
@@ -93,7 +100,7 @@ def _is_youtube_url(s: str) -> bool:
     return any(domain in s for domain in ("youtube.com/", "youtu.be/"))
 
 
-def _download_video(url: str, dl_dir: Path, log) -> Path:
+def _download_video(url: str, dl_dir: Path, log, cookies_file: str = "") -> Path:
     """Download video + subtitles via yt-dlp (no comments — API handles those)."""
     import yt_dlp
 
@@ -111,6 +118,10 @@ def _download_video(url: str, dl_dir: Path, log) -> Path:
         "windowsfilenames": True,
         "ignoreerrors": True,
     }
+
+    if cookies_file and Path(cookies_file).exists():
+        ydl_opts["cookiefile"] = cookies_file
+        log.info("Using cookies: %s", cookies_file)
 
     log.info("Downloading video from %s ...", url)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -145,45 +156,72 @@ def main() -> int:
     args = _parse_args()
     log = build_logger("peanut_react", args.verbose)
 
+    # ── Load config (.env + config.yaml + env vars) ──────────────────
+    cfg = load_config()
+
     video_input = args.video.strip()
     is_url = _is_youtube_url(video_input)
 
     # ── Resolve work directory ───────────────────────────────────────
-    work_dir = Path(args.work_dir) if args.work_dir else Path("peanut_work")
+    work_dir = Path(args.work_dir or cfg.work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
 
+    # ── Progress tracker ─────────────────────────────────────────────
+    tracker = ProgressTracker(work_dir / cfg.progress_file)
+
     info_json_path = Path(args.info_json) if args.info_json else None
+
+    # ── Extract video ID for progress tracking ───────────────────────
+    video_id = video_input  # fallback to full string
+    if is_url:
+        try:
+            from peanut_reacts.download.youtube_comments import extract_video_id
+            video_id = extract_video_id(video_input)
+        except ValueError:
+            pass
+
+    # Skip if already completed
+    if tracker.is_completed(video_id):
+        prev = tracker.get(video_id)
+        log.info("Already processed: %s → %s", video_id, prev.output_path if prev else "?")
+        log.info("Use --work-dir to change output or delete progress file to reprocess.")
+        return 0
 
     # ── URL flow: download video + fetch comments ────────────────────
     if is_url:
         dl_dir = work_dir / "download"
+        cookies = args.cookies_file or cfg.cookies_file
+
+        tracker.start(video_id, url=video_input)
+        tracker.update_step(video_id, "downloading")
 
         try:
-            video_path = _download_video(video_input, dl_dir, log)
+            video_path = _download_video(video_input, dl_dir, log, cookies_file=cookies)
         except Exception as e:
             log.error("Download failed: %s", e)
+            tracker.fail(video_id, str(e), step="downloading")
             return 1
 
         # Fetch comments via YouTube API (if key available and not skipped)
-        yt_api_key = args.youtube_api_key or os.environ.get("YOUTUBE_API_KEY", "")
+        yt_api_key = args.youtube_api_key or cfg.youtube_api_key
 
         if args.no_comments:
             log.info("Skipping comments (--no-comments).")
         elif info_json_path:
             log.info("Using provided info.json: %s", info_json_path)
         elif yt_api_key:
+            tracker.update_step(video_id, "fetching_comments")
             try:
                 info_json_path = _fetch_comments_via_api(
                     video_input, work_dir, yt_api_key,
-                    args.max_comments, log,
+                    args.max_comments or cfg.max_comments, log,
                 )
             except Exception as e:
                 log.warning("Comment fetch failed (continuing without): %s", e)
         else:
             log.warning(
-                "No YouTube API key found. Set YOUTUBE_API_KEY env var or "
-                "use --youtube-api-key to enable comment analysis. "
-                "Proceeding without comments."
+                "No YouTube API key found. Set YOUTUBE_API_KEY in .env or "
+                "use --youtube-api-key to enable comment analysis."
             )
     else:
         # ── Local file flow ──────────────────────────────────────────
@@ -198,7 +236,7 @@ def main() -> int:
     else:
         output_path = video_path.with_name(f"{video_path.stem}_peanut_reacts.mp4")
 
-    # ── Build job config ─────────────────────────────────────────────
+    # ── Build job config (CLI flags override .env/config defaults) ───
     layout = LayoutConfig(
         facecam_position=_FACECAM_POSITION_MAP.get(
             args.facecam_position, FacecamPosition.BOTTOM_RIGHT,
@@ -206,18 +244,21 @@ def main() -> int:
         facecam_scale=args.facecam_scale,
         facecam_border_color=args.facecam_border_color,
         name_tag_enabled=bool(args.name_tag),
-        name_tag_text=args.name_tag or "PEANUT",
+        name_tag_text=args.name_tag or cfg.name_tag,
         speech_position=args.speech_position,
     )
 
     llm_config = LLMConfig(
-        provider=args.provider,
-        model=args.model,
+        provider=args.provider or cfg.llm_provider,
+        model=args.model or cfg.llm_model,
         api_key=args.llm_api_key,
         temperature=args.temperature,
     )
 
-    tts_config = TTSConfig(voice=args.voice, rate=args.rate)
+    tts_config = TTSConfig(
+        voice=args.voice or cfg.tts_voice,
+        rate=args.rate or cfg.tts_rate,
+    )
 
     if args.no_comments:
         info_json_path = None
@@ -229,23 +270,26 @@ def main() -> int:
         output_path=output_path,
         info_json_path=info_json_path,
         llm_config=llm_config,
-        max_reactions=args.max_reactions,
+        max_reactions=args.max_reactions or cfg.max_reactions,
         tts_config=tts_config,
         layout=layout,
         transcript_path=transcript_path,
-        whisper_model=args.whisper_model,
-        whisper_device=args.whisper_device,
+        whisper_model=args.whisper_model or cfg.whisper_model,
+        whisper_device=args.whisper_device or cfg.whisper_device,
         work_dir=work_dir,
     )
 
-    # ── Run pipeline ─────────────────────────────────────────────────
+    # ── Run pipeline with progress tracking ──────────────────────────
     pipeline = ReactionPipeline(log)
+    tracker.update_step(video_id, "pipeline_running")
 
     try:
         result = pipeline.run(job)
+        tracker.complete(video_id, str(result))
         log.info("Done! Output: %s", result)
         return 0
     except Exception as e:
+        tracker.fail(video_id, str(e), step="pipeline")
         log.error("Pipeline failed: %s", e)
         if args.verbose:
             import traceback
