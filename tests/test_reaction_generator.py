@@ -57,11 +57,11 @@ class TestParseLLMResponse:
 
     def test_invalid_emotion_falls_back(self):
         response = json.dumps([
-            {"start": 5.0, "text": "test", "emotion": "angry"}
+            {"start": 5.0, "text": "test", "emotion": "nonsense_emotion"}
         ])
         lines = _parse_llm_response(response, video_duration=60.0)
         assert len(lines) == 1
-        assert lines[0].emotion == "amused"  # fallback
+        assert lines[0].emotion == "amused"  # fallback for truly invalid emotions
 
     def test_filters_beyond_duration(self):
         response = json.dumps([

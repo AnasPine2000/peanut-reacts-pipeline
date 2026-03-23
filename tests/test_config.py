@@ -44,7 +44,7 @@ class TestPeanutConfig:
         assert cfg.llm_provider == "deepseek"
         assert cfg.tts_voice == "en-US-GuyNeural"
         assert cfg.facecam_scale == 0.22
-        assert cfg.max_reactions == 15
+        assert cfg.max_reactions == 40
 
     def test_load_from_dotenv(self, tmp_path: Path):
         env_file = tmp_path / ".env"
@@ -65,4 +65,4 @@ class TestPeanutConfig:
         env_file.write_text("MAX_REACTIONS=abc\n", encoding="utf-8")
         (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
         cfg = load_config(tmp_path)
-        assert cfg.max_reactions == 15  # falls back to default
+        assert cfg.max_reactions == 40  # falls back to default

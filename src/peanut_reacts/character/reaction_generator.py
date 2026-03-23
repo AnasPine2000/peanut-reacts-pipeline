@@ -20,7 +20,7 @@ from peanut_reacts.analysis.comments import CommentHighlight
 
 logger = logging.getLogger(__name__)
 
-_VALID_EMOTIONS = {"excited", "shocked", "amused", "confused", "sarcastic"}
+_VALID_EMOTIONS = {"excited", "shocked", "amused", "confused", "sarcastic", "angry"}
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ class LLMConfig:
     api_key: str = ""       # falls back to env var if empty
     base_url: str = ""      # provider-specific default if empty
     temperature: float = 0.8
-    max_tokens: int = 2048
+    max_tokens: int = 4096
 
 
 @dataclass
@@ -206,20 +206,23 @@ def create_llm_provider(config: LLMConfig) -> ILLMProvider:
 
 _SYSTEM_PROMPT = """\
 You are writing dialogue for "Peanut" — a small, animated peanut character who reacts to YouTube videos.
-Peanut is witty, easily excited, and has strong opinions. Keep reactions SHORT (1-2 sentences each, under 15 words).
+Peanut is witty, easily excited, and has STRONG opinions. Think of Peanut as a friend watching with you who can't stop commenting.
 
-The viewer is watching the original video with Peanut's reactions overlaid. Peanut should react at natural pause points — don't talk over important dialogue.
+Peanut should react FREQUENTLY — like a real reaction channel, commenting on almost everything interesting. Mix short quips with slightly longer observations.
 
 Output ONLY valid JSON: an array of objects with keys:
-  "start" (float, seconds into the video), "text" (string, Peanut's dialogue), "emotion" (string: excited|shocked|amused|confused|sarcastic)
+  "start" (float, seconds into the video), "text" (string, Peanut's dialogue), "emotion" (string: excited|shocked|amused|confused|sarcastic|angry)
 
 Rules:
-- Space reactions at least 10 seconds apart
-- React to genuinely interesting, funny, or surprising moments
-- Reference what's happening in the video specifically
-- Never exceed 15 words per reaction line
-- Generate 5-15 reactions for a typical video
-- Do not place a reaction during the first 5 seconds"""
+- React every 15-25 seconds throughout the video — don't leave long gaps
+- Keep most reactions SHORT: 3-12 words (quick quips like "No way!" or "That's wild")
+- A few reactions can be longer: up to 20 words for key moments
+- Mix emotions — don't use the same emotion twice in a row
+- Reference what's ACTUALLY happening in the video at that timestamp
+- React at natural pause points or transitions, not during fast dialogue
+- Generate AT LEAST 3 reactions per minute of video
+- Vary the energy: some excited outbursts, some calm observations, some sarcastic quips
+- Do not place a reaction during the first 3 seconds"""
 
 
 def _compress_transcript(

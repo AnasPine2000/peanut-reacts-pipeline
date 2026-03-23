@@ -58,7 +58,7 @@ class ReactionJob:
 
     # LLM
     llm_config: LLMConfig = field(default_factory=LLMConfig)
-    max_reactions: int = 15
+    max_reactions: int = 40
 
     # TTS
     tts_config: TTSConfig = field(default_factory=TTSConfig)

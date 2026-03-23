@@ -108,7 +108,7 @@ class PeanutConfig:
     work_dir: str = "peanut_work"
 
     # Pipeline
-    max_reactions: int = 15
+    max_reactions: int = 40
     max_comments: int = 500
     whisper_model: str = "base"
     whisper_device: str = "cuda"
@@ -190,7 +190,7 @@ def load_config(config_dir: Optional[Path] = None) -> PeanutConfig:
     cfg.output_dir = _get("OUTPUT_DIR", "output_dir", "downloads")
     cfg.work_dir = _get("WORK_DIR", "work_dir", "peanut_work")
 
-    cfg.max_reactions = _get_int("MAX_REACTIONS", "max_reactions", 15)
+    cfg.max_reactions = _get_int("MAX_REACTIONS", "max_reactions", 40)
     cfg.max_comments = _get_int("MAX_COMMENTS", "max_comments", 500)
     cfg.whisper_model = _get("WHISPER_MODEL", "whisper_model", "base")
     cfg.whisper_device = _get("WHISPER_DEVICE", "whisper_device", "cuda")
