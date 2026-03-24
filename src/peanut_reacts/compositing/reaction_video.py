@@ -396,7 +396,11 @@ def _final_composite(
 
     cmd = ["ffmpeg", "-y"] + inputs
     if all_filters:
-        cmd.extend(["-filter_complex", all_filters])
+        # Write filter_complex to a file to avoid Windows command line length limit
+        # (color-coded subtitles can generate 1000+ drawtext filters)
+        filter_script = output_path.parent / f"_filter_{output_path.stem}.txt"
+        filter_script.write_text(all_filters, encoding="utf-8")
+        cmd.extend(["-filter_complex_script", str(filter_script)])
         cmd.extend(["-map", f"[{final_video_label}]" if video_filters else "0:v"])
         cmd.extend(["-map", final_audio_label])
     else:
