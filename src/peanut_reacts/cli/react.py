@@ -94,6 +94,13 @@ def _parse_args() -> argparse.Namespace:
                      choices=["below_facecam", "bottom_center"],
                      help="Where to show speech text")
 
+    # Character renderer
+    char = p.add_argument_group("Character options")
+    char.add_argument("--wav2lip", action="store_true",
+                      help="Use Wav2Lip AI lip-sync (requires face image)")
+    char.add_argument("--face-image", default=None,
+                      help="Path to peanut face image for Wav2Lip (default: assets/peanut_face/realistic_neutral.png)")
+
     # Transcript
     p.add_argument("--transcript", default=None, help="Path to transcript JSON or SRT")
     p.add_argument("--whisper-model", default="base", help="Whisper model for transcription")
@@ -283,6 +290,19 @@ def main() -> int:
 
     transcript_path = Path(args.transcript) if args.transcript else None
 
+    # Resolve face image for Wav2Lip
+    face_image = None
+    if args.wav2lip:
+        if args.face_image:
+            face_image = Path(args.face_image).resolve()
+        else:
+            # Default face image location
+            default_face = Path(__file__).resolve().parents[2].parent / "assets" / "peanut_face" / "realistic_neutral.png"
+            if default_face.exists():
+                face_image = default_face
+            else:
+                log.warning("--wav2lip: no face image found at %s, falling back to PIL renderer", default_face)
+
     import os as _os
     job = ReactionJob(
         video_path=video_path,
@@ -291,6 +311,8 @@ def main() -> int:
         llm_config=llm_config,
         max_reactions=args.max_reactions or cfg.max_reactions,
         tts_config=tts_config,
+        use_wav2lip=args.wav2lip,
+        peanut_face_image=face_image,
         layout=layout,
         transcript_path=transcript_path,
         whisper_model=args.whisper_model or cfg.whisper_model,

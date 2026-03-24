@@ -64,6 +64,8 @@ class ReactionJob:
     tts_config: TTSConfig = field(default_factory=TTSConfig)
 
     # Character rendering
+    use_wav2lip: bool = False            # use AI lip-sync instead of PIL renderer
+    peanut_face_image: Optional[Path] = None  # face image for Wav2Lip
     peanut_fps: int = 24
     peanut_canvas: int = 512
     peanut_char_size: int = 420
@@ -675,20 +677,42 @@ class ReactionPipeline:
 
         self._log.info("Synthesized %d TTS segment(s).", len(tts_pairs))
 
-        # Step 5a: Render idle peanut loop (4s, mouth closed, neutral)
+        # Step 5: Render peanut animation segments
+        use_wav2lip = job.use_wav2lip and job.peanut_face_image and job.peanut_face_image.exists()
+
+        if use_wav2lip:
+            from peanut_reacts.character.wav2lip_sync import wav2lip_available, render_lipsync_reaction
+            if not wav2lip_available():
+                self._log.warning("Wav2Lip not available — falling back to PIL renderer.")
+                use_wav2lip = False
+
+        # Step 5a: Idle peanut loop
         idle_path = work_dir / "peanut_idle_loop.mp4"
         if not idle_path.exists():
-            self._log.info("Rendering idle peanut loop (4s) ...")
-            render_reaction_video(
-                [],  # no speech events = mouth closed
-                4.0,
-                idle_path,
-                fps=job.peanut_fps,
-                canvas=job.peanut_canvas,
-                char_size=job.peanut_char_size,
-                seed=job.peanut_seed,
-                emotion="neutral",
-            )
+            if use_wav2lip:
+                # For Wav2Lip: idle = static face image as a 4s video (no lip movement)
+                self._log.info("Creating idle peanut loop from face image (4s) ...")
+                subprocess.run([
+                    "ffmpeg", "-y",
+                    "-loop", "1", "-i", str(job.peanut_face_image.resolve()),
+                    "-t", "4",
+                    "-vf", f"scale={job.peanut_canvas}:{job.peanut_canvas}:force_original_aspect_ratio=decrease,"
+                           f"pad={job.peanut_canvas}:{job.peanut_canvas}:(ow-iw)/2:(oh-ih)/2:color=0x00FF00",
+                    "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+                    str(idle_path),
+                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                self._log.info("Rendering idle peanut loop (4s) ...")
+                render_reaction_video(
+                    [],  # no speech events = mouth closed
+                    4.0,
+                    idle_path,
+                    fps=job.peanut_fps,
+                    canvas=job.peanut_canvas,
+                    char_size=job.peanut_char_size,
+                    seed=job.peanut_seed,
+                    emotion="neutral",
+                )
 
         # Step 5b: Render speech-synced peanut segments
         peanut_segments: list[tuple[ReactionLine, Path]] = []
@@ -699,25 +723,39 @@ class ReactionPipeline:
             if tts_result.duration <= 0:
                 continue
 
-            speech_events = word_timings_to_speech_events(
-                tts_result.word_timings, line_start=0.0,
-            )
             webm_path = webm_dir / f"peanut_{idx + 1:03d}.mp4"
 
             self._log.info(
                 "Rendering peanut segment %d (%.2fs, %s) ...",
                 idx + 1, tts_result.duration, line.emotion,
             )
-            render_reaction_video(
-                speech_events,
-                tts_result.duration + 0.3,
-                webm_path,
-                fps=job.peanut_fps,
-                canvas=job.peanut_canvas,
-                char_size=job.peanut_char_size,
-                seed=job.peanut_seed,
-                emotion=line.emotion,
-            )
+
+            if use_wav2lip:
+                # Wav2Lip: animate face image with TTS audio
+                render_lipsync_reaction(
+                    job.peanut_face_image,
+                    tts_result.audio_path,
+                    webm_path,
+                    tts_result.duration,
+                    canvas_size=job.peanut_canvas,
+                    green_screen=True,
+                )
+            else:
+                # PIL renderer: speech-synced cartoon peanut
+                speech_events = word_timings_to_speech_events(
+                    tts_result.word_timings, line_start=0.0,
+                )
+                render_reaction_video(
+                    speech_events,
+                    tts_result.duration + 0.3,
+                    webm_path,
+                    fps=job.peanut_fps,
+                    canvas=job.peanut_canvas,
+                    char_size=job.peanut_char_size,
+                    seed=job.peanut_seed,
+                    emotion=line.emotion,
+                )
+
             peanut_segments.append((line, webm_path))
 
         # Step 6: Build reaction audio track
