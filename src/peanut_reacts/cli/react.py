@@ -48,6 +48,12 @@ def _parse_args() -> argparse.Namespace:
 
     # TTS options
     tts = p.add_argument_group("TTS options")
+    tts.add_argument("--tts-engine", default="edge", choices=["edge", "elevenlabs"],
+                     help="TTS engine: edge (free) or elevenlabs (expressive, paid)")
+    tts.add_argument("--elevenlabs-key", default="",
+                     help="ElevenLabs API key (or set ELEVENLABS_API_KEY in .env)")
+    tts.add_argument("--elevenlabs-voice", default="TX3LPaxmHKxFdv7VOQHJ",
+                     help="ElevenLabs voice ID (default: Liam - Energetic Creator)")
     tts.add_argument("--voice", default="en-US-GuyNeural", help="Edge TTS voice")
     tts.add_argument("--rate", default="+10%", help="Speaking rate (e.g. +10%%)")
 
@@ -310,7 +316,10 @@ def main() -> int:
         info_json_path=info_json_path,
         llm_config=llm_config,
         max_reactions=args.max_reactions or cfg.max_reactions,
+        tts_engine_type=args.tts_engine,
         tts_config=tts_config,
+        elevenlabs_api_key=args.elevenlabs_key or os.environ.get("ELEVENLABS_API_KEY", ""),
+        elevenlabs_voice_id=args.elevenlabs_voice,
         use_wav2lip=args.wav2lip,
         peanut_face_image=face_image,
         layout=layout,

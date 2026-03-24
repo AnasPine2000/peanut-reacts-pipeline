@@ -61,7 +61,10 @@ class ReactionJob:
     max_reactions: int = 40
 
     # TTS
+    tts_engine_type: str = "edge"  # "edge" or "elevenlabs"
     tts_config: TTSConfig = field(default_factory=TTSConfig)
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "TX3LPaxmHKxFdv7VOQHJ"  # Liam
 
     # Character rendering
     use_wav2lip: bool = False            # use AI lip-sync instead of PIL renderer
@@ -639,15 +642,35 @@ class ReactionPipeline:
         script_path.write_text(json.dumps(script_to_dict(script), indent=2), encoding="utf-8")
 
         # Step 4: Synthesize TTS
-        tts_engine = EdgeTTSEngine(job.tts_config, self._log)
         tts_dir = work_dir / "tts"
         line_dicts = [{"start": l.start, "end": l.end, "text": l.text, "emotion": l.emotion}
                       for l in script.lines]
-        tts_results = tts_engine.synthesize_lines(line_dicts, tts_dir)
+
+        if job.tts_engine_type == "elevenlabs" and job.elevenlabs_api_key:
+            from peanut_reacts.character.elevenlabs_tts import (
+                ElevenLabsConfig, ElevenLabsTTSEngine,
+            )
+            el_config = ElevenLabsConfig(
+                api_key=job.elevenlabs_api_key,
+                voice_id=job.elevenlabs_voice_id,
+            )
+            el_engine = ElevenLabsTTSEngine(el_config, self._log)
+            el_results = el_engine.synthesize_lines(line_dicts, tts_dir)
+
+            # Convert ElevenLabs results to the same format as Edge TTS
+            tts_results = []
+            for line_dict, el_result in el_results:
+                tts_result = TTSResult(
+                    audio_path=el_result.audio_path,
+                    duration=el_result.duration,
+                    word_timings=[],  # ElevenLabs doesn't provide word timings
+                )
+                tts_results.append((line_dict, tts_result))
+        else:
+            tts_engine = EdgeTTSEngine(job.tts_config, self._log)
+            tts_results = tts_engine.synthesize_lines(line_dicts, tts_dir)
 
         # Map back to ReactionLine objects with corrected timing.
-        # End time = start + actual TTS duration (not the LLM's estimate).
-        # Clamp so reactions don't exceed video duration.
         tts_pairs: list[tuple[ReactionLine, TTSResult]] = []
         for line_dict, tts_result in tts_results:
             if tts_result.duration <= 0:
