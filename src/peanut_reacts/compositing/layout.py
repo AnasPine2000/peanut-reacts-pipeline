@@ -33,12 +33,12 @@ class LayoutConfig:
     facecam_corner_radius: int = 8      # rounded corners (0 = square)
 
     # Speech text (subtitle bar near facecam)
-    speech_font_size: int = 24
-    speech_font_color: str = "white"
-    speech_border_width: int = 2
+    speech_font_size: int = 28
+    speech_font_color: str = "yellow"
+    speech_border_width: int = 3
     speech_border_color: str = "black"
     speech_bg_enabled: bool = True
-    speech_bg_color: str = "black@0.6"  # semi-transparent background
+    speech_bg_color: str = "black@0.7"  # semi-transparent background
     speech_position: str = "below_facecam"  # "below_facecam" or "bottom_center"
 
     # Name tag under facecam (like the "JANITOR" card in the reference)

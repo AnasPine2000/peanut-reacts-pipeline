@@ -250,14 +250,19 @@ def _merge_consecutive_segments(
 def build_subtitle_filters(
     colored_segments: list[SpeakerSegment],
     *,
-    font_size: int = 22,
-    y_position: str = "h-50",
-    max_segments: int = 120,
+    font_size: int = 32,
+    y_position: str = "h-70",
+    x_position: str = "20",
+    max_segments: int = 150,
+    max_text_len: int = 55,
 ) -> list[str]:
     """Build ffmpeg drawtext filters for color-coded subtitles.
 
     Merges consecutive same-speaker segments to reduce filter count
     and stay within ffmpeg command line limits.
+
+    Subtitles are positioned bottom-left by default to avoid overlapping
+    with the peanut facecam (bottom-right).
     """
     # Merge to reduce segment count
     merged = _merge_consecutive_segments(colored_segments)
@@ -272,9 +277,9 @@ def build_subtitle_filters(
             .replace(":", "\\:")
             .replace("%", "%%")
         )
-        # Truncate long text
-        if len(safe_text) > 70:
-            safe_text = safe_text[:67] + "..."
+        # Truncate long text to prevent overflow
+        if len(safe_text) > max_text_len:
+            safe_text = safe_text[:max_text_len - 3] + "..."
 
         enable = f"between(t,{seg.start:.2f},{seg.end:.2f})"
 
@@ -283,9 +288,9 @@ def build_subtitle_filters(
             f"text='{safe_text}':"
             f"fontsize={font_size}:"
             f"fontcolor={seg.color_ffmpeg}:"
-            f"borderw=2:bordercolor=black:"
-            f"box=1:boxcolor=black@0.5:boxborderw=6:"
-            f"x=(w-tw)/2:y={y_position}:"
+            f"borderw=3:bordercolor=black:"
+            f"box=1:boxcolor=black@0.6:boxborderw=8:"
+            f"x={x_position}:y={y_position}:"
             f"enable='{enable}'"
         )
 

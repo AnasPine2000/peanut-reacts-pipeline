@@ -200,6 +200,7 @@ def _final_composite(
     reaction_audio: Path,
     output_path: Path,
     *,
+    idle_loop_path: Path | None = None,
     layout: LayoutConfig | None = None,
     speaker_subtitle_filters: list[str] | None = None,
     video_width: int = 1920,
@@ -234,43 +235,44 @@ def _final_composite(
         fc_x, fc_y = m, vh - fc_size - m
 
     inputs = ["-i", str(original_video)]
+
+    # Input 1: idle peanut loop (looped to cover full video)
+    has_idle = idle_loop_path is not None and idle_loop_path.exists()
+    if has_idle:
+        inputs.extend(["-stream_loop", "-1", "-i", str(idle_loop_path)])
+        idle_input_idx = 1
+        segment_offset = 2  # speaking segments start at input 2
+    else:
+        idle_input_idx = -1
+        segment_offset = 1
+
     for _, webm_path in peanut_segments:
         inputs.extend(["-i", str(webm_path)])
     inputs.extend(["-i", str(reaction_audio)])
 
     n_segments = len(peanut_segments)
-    reaction_audio_idx = n_segments + 1
+    reaction_audio_idx = segment_offset + n_segments
 
     video_filters: list[str] = []
     prev_label = "0:v"
 
-    # ── Build enable expression covering all reaction times ──────────
-    # The facecam frame + name tag only appear when peanut is speaking
-    all_enables = "+".join(
-        f"between(t,{line.start:.2f},{line.end:.2f})"
-        for line, _ in peanut_segments
-    )
-    frame_enable = f"enable='gt({all_enables},0)'" if all_enables else ""
-
-    # ── Draw facecam background frame (visible during reactions) ─────
+    # ── Draw facecam background frame (ALWAYS visible) ─────────────
     video_filters.append(
         f"[{prev_label}]drawbox="
         f"x={fc_x}:y={fc_y}:w={fc_size}:h={fc_size}:"
-        f"color={layout.facecam_bg_color}:t=fill:"
-        f"{frame_enable}[bg0]",
+        f"color={layout.facecam_bg_color}:t=fill[bg0]",
     )
     prev_label = "bg0"
 
-    # Border
+    # Border (always visible)
     video_filters.append(
         f"[{prev_label}]drawbox="
         f"x={fc_x}:y={fc_y}:w={fc_size}:h={fc_size}:"
-        f"color={layout.facecam_border_color}:t={layout.facecam_border_width}:"
-        f"{frame_enable}[frame0]",
+        f"color={layout.facecam_border_color}:t={layout.facecam_border_width}[frame0]",
     )
     prev_label = "frame0"
 
-    # ── Name tag at bottom of facecam frame ──────────────────────────
+    # ── Name tag at bottom of facecam frame (always visible) ─────────
     if layout.name_tag_enabled:
         tag_text = layout.name_tag_text.replace("'", "\u2019").replace(":", "\\:")
         tag_center_x = fc_x + fc_size // 2
@@ -282,14 +284,24 @@ def _final_composite(
             f"fontsize={layout.name_tag_font_size}:fontcolor={layout.name_tag_font_color}:"
             f"borderw=1:bordercolor=black:"
             f"box=1:boxcolor={layout.name_tag_bg_color}:boxborderw=6:"
-            f"x={tag_center_x}-tw/2:y={tag_y}:"
-            f"{frame_enable}[nametag]",
+            f"x={tag_center_x}-tw/2:y={tag_y}[nametag]",
         )
         prev_label = "nametag"
 
-    # ── Overlay peanut segments (with colorkey + scale) ──────────────
+    # ── Overlay idle peanut (always visible, looping) ───────────────
+    if has_idle:
+        video_filters.append(
+            f"[{idle_input_idx}:v]scale={fc_size}:{fc_size},"
+            f"colorkey=0x00FF00:0.3:0.2[idle_ck]",
+        )
+        video_filters.append(
+            f"[{prev_label}][idle_ck]overlay=x={fc_x}:y={fc_y}:shortest=1[idle_ov]",
+        )
+        prev_label = "idle_ov"
+
+    # ── Overlay speaking peanut segments (with colorkey + scale) ──────
     for i, (line, _) in enumerate(peanut_segments):
-        input_idx = i + 1
+        input_idx = i + segment_offset
         out_label = f"v{i}"
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
 
@@ -303,10 +315,7 @@ def _final_composite(
         )
         prev_label = out_label
 
-    # ── Speech text (subtitle style near facecam) ────────────────────
-    # Compute max text width to prevent overflow at video edges
-    max_text_w = min(fc_size + 60, vw - fc_x - 10)  # clamp to not exceed right edge
-
+    # ── Peanut speech text (above facecam, yellow with bg) ──────────
     for i, (line, _) in enumerate(peanut_segments):
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
         safe_text = (
@@ -318,33 +327,18 @@ def _final_composite(
         )
         out_label = f"t{i}"
 
-        if layout.speech_position == "bottom_center":
-            speech_x = "(w-tw)/2"
-            speech_y = str(vh - 60)
-        else:
-            # Clamp text to stay within video bounds
-            if pos in (FacecamPosition.BOTTOM_RIGHT, FacecamPosition.TOP_RIGHT):
-                # Right-align text to facecam right edge
-                right_edge = fc_x + fc_size
-                speech_x = f"{right_edge}-tw"
-            else:
-                speech_x = str(fc_x)
-
-            if pos in (FacecamPosition.BOTTOM_RIGHT, FacecamPosition.BOTTOM_LEFT):
-                speech_y = str(fc_y - 40)
-            else:
-                speech_y = str(fc_y + fc_size + 15)
+        # Position above facecam, right-aligned to facecam right edge
+        right_edge = fc_x + fc_size
+        speech_x = f"{right_edge}-tw"
+        speech_y = str(max(10, fc_y - 50))  # above facecam with padding
 
         box_opts = ""
         if layout.speech_bg_enabled:
-            box_opts = f"box=1:boxcolor={layout.speech_bg_color}:boxborderw=8:"
+            box_opts = f"box=1:boxcolor={layout.speech_bg_color}:boxborderw=10:"
 
-        # Use a smaller font for longer text to prevent overflow
         font_size = layout.speech_font_size
-        if len(line.text) > 35:
-            font_size = max(14, font_size - 4)
-        if len(line.text) > 50:
-            font_size = max(12, font_size - 4)
+        if len(line.text) > 40:
+            font_size = max(18, font_size - 4)
 
         video_filters.append(
             f"[{prev_label}]drawtext="
@@ -681,7 +675,22 @@ class ReactionPipeline:
 
         self._log.info("Synthesized %d TTS segment(s).", len(tts_pairs))
 
-        # Step 5: Render speech-synced peanut animation
+        # Step 5a: Render idle peanut loop (4s, mouth closed, neutral)
+        idle_path = work_dir / "peanut_idle_loop.mp4"
+        if not idle_path.exists():
+            self._log.info("Rendering idle peanut loop (4s) ...")
+            render_reaction_video(
+                [],  # no speech events = mouth closed
+                4.0,
+                idle_path,
+                fps=job.peanut_fps,
+                canvas=job.peanut_canvas,
+                char_size=job.peanut_char_size,
+                seed=job.peanut_seed,
+                emotion="neutral",
+            )
+
+        # Step 5b: Render speech-synced peanut segments
         peanut_segments: list[tuple[ReactionLine, Path]] = []
         webm_dir = work_dir / "peanut_webm"
         webm_dir.mkdir(exist_ok=True)
@@ -731,7 +740,9 @@ class ReactionPipeline:
                     work_dir=work_dir,
                 )
                 colored_segs = align_transcript_with_speakers(transcript, diarization)
-                speaker_filters = build_subtitle_filters(colored_segs, font_size=20)
+                speaker_filters = build_subtitle_filters(
+                    colored_segs, font_size=30, y_position="h-80", x_position="20",
+                )
                 self._log.info(
                     "Diarization: %d speakers, %d subtitle segments",
                     diarization.num_speakers, len(colored_segs),
@@ -746,6 +757,7 @@ class ReactionPipeline:
             peanut_segments,
             reaction_audio,
             job.output_path,
+            idle_loop_path=idle_path,
             layout=job.layout,
             speaker_subtitle_filters=speaker_filters,
             video_width=video_w,
