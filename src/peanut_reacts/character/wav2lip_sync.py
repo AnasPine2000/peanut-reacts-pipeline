@@ -157,14 +157,24 @@ def render_lipsync_reaction(
             shutil.move(str(raw_output), str(output_path))
         return output_path
 
-    # Step 2: Scale to canvas and add green screen background
+    # Step 2: Scale to canvas, add green screen, animate with head sway + tilt
+    cs = canvas_size
+    pad = cs + 68
+    vf = (
+        f"scale={pad}:{pad}:force_original_aspect_ratio=decrease,"
+        f"pad={pad}:{pad}:(ow-iw)/2:(oh-ih)/2:color=0x00FF00,"
+        # Head sway (more energetic during speech)
+        f"crop=w={cs}:h={cs}"
+        f":x='{(pad-cs)//2}+20*sin(2*PI*t/1.5)'"
+        f":y='{(pad-cs)//2}+14*sin(2*PI*t/1.2)',"
+        # Head tilt (slightly faster during speech)
+        f"rotate='0.04*sin(2*PI*t/2)':fillcolor=0x00FF00"
+        f":ow={cs}:oh={cs}"
+    )
     cmd = [
         "ffmpeg", "-y",
         "-i", str(raw_output),
-        "-vf", (
-            f"scale={canvas_size}:{canvas_size}:force_original_aspect_ratio=decrease,"
-            f"pad={canvas_size}:{canvas_size}:(ow-iw)/2:(oh-ih)/2:color=0x00FF00"
-        ),
+        "-vf", vf,
         "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
         "-pix_fmt", "yuv420p",
         "-an",  # no audio in the video segment

@@ -713,14 +713,28 @@ class ReactionPipeline:
         idle_path = work_dir / "peanut_idle_loop.mp4"
         if not idle_path.exists():
             if use_wav2lip:
-                # For Wav2Lip: idle = static face image as a 4s video (no lip movement)
-                self._log.info("Creating idle peanut loop from face image (4s) ...")
+                # For Wav2Lip: create an animated idle from the static face
+                # Add breathing zoom, gentle sway, and subtle movement
+                self._log.info("Creating animated idle peanut loop (4s) ...")
+                canvas = job.peanut_canvas
+                pad = canvas + 68  # extra space for sway + rotation
+                # Dramatic head sway + tilt for a "living" character feel
+                vf = (
+                    f"scale={pad}:{pad}:force_original_aspect_ratio=decrease,"
+                    f"pad={pad}:{pad}:(ow-iw)/2:(oh-ih)/2:color=0x00FF00,"
+                    # Head sway (left/right + up/down bobbing)
+                    f"crop=w={canvas}:h={canvas}"
+                    f":x='{(pad-canvas)//2}+18*sin(2*PI*t/2.5)'"
+                    f":y='{(pad-canvas)//2}+12*sin(2*PI*t/1.8)',"
+                    # Head tilt rotation
+                    f"rotate='0.03*sin(2*PI*t/3)':fillcolor=0x00FF00"
+                    f":ow={canvas}:oh={canvas}"
+                )
                 subprocess.run([
                     "ffmpeg", "-y",
                     "-loop", "1", "-i", str(job.peanut_face_image.resolve()),
-                    "-t", "4",
-                    "-vf", f"scale={job.peanut_canvas}:{job.peanut_canvas}:force_original_aspect_ratio=decrease,"
-                           f"pad={job.peanut_canvas}:{job.peanut_canvas}:(ow-iw)/2:(oh-ih)/2:color=0x00FF00",
+                    "-t", "4", "-r", "25",
+                    "-vf", vf,
                     "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
                     str(idle_path),
                 ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
