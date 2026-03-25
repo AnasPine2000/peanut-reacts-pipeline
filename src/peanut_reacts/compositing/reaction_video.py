@@ -822,7 +822,9 @@ class ReactionPipeline:
                 )
                 colored_segs = align_transcript_with_speakers(transcript, diarization)
                 speaker_filters = build_subtitle_filters(
-                    colored_segs, font_size=30, y_position="h-80", x_position="20",
+                    colored_segs,
+                    video_width=video_w,
+                    video_height=video_h,
                 )
                 self._log.info(
                     "Diarization: %d speakers, %d subtitle segments",
