@@ -67,9 +67,10 @@ class ReactionJob:
     elevenlabs_voice_id: str = "TX3LPaxmHKxFdv7VOQHJ"  # Liam
 
     # Character rendering
-    use_wav2lip: bool = False            # use AI lip-sync instead of PIL renderer
+    renderer: str = "cartoon"            # "cartoon" (expression swap), "wav2lip", or "pil"
+    use_wav2lip: bool = False            # legacy: same as renderer="wav2lip"
     peanut_face_image: Optional[Path] = None  # face image for Wav2Lip
-    peanut_fps: int = 24
+    peanut_fps: int = 25
     peanut_canvas: int = 512
     peanut_char_size: int = 420
     peanut_seed: int = 0
@@ -317,44 +318,6 @@ def _final_composite(
         video_filters.append(
             f"[{prev_label}][ck{i}]overlay=x={fc_x}:y={fc_y}"
             f":enable='{enable}'[{out_label}]",
-        )
-        prev_label = out_label
-
-    # ── Peanut speech text (above facecam, yellow with bg) ──────────
-    for i, (line, _) in enumerate(peanut_segments):
-        enable = f"between(t,{line.start:.2f},{line.end:.2f})"
-        safe_text = (
-            line.text
-            .replace("\\", "\\\\")
-            .replace("'", "\u2019")
-            .replace(":", "\\:")
-            .replace("%", "%%")
-        )
-        out_label = f"t{i}"
-
-        # Position above facecam, right-aligned to facecam right edge
-        right_edge = fc_x + fc_size
-        speech_x = f"{right_edge}-tw"
-        speech_y = str(max(10, fc_y - 50))  # above facecam with padding
-
-        box_opts = ""
-        if layout.speech_bg_enabled:
-            box_opts = f"box=1:boxcolor={layout.speech_bg_color}:boxborderw=10:"
-
-        font_size = layout.speech_font_size
-        if len(line.text) > 40:
-            font_size = max(18, font_size - 4)
-
-        video_filters.append(
-            f"[{prev_label}]drawtext="
-            f"text='{safe_text}':"
-            f"fontsize={font_size}:"
-            f"fontcolor={layout.speech_font_color}:"
-            f"borderw={layout.speech_border_width}:"
-            f"bordercolor={layout.speech_border_color}:"
-            f"{box_opts}"
-            f"x={speech_x}:y={speech_y}:"
-            f"enable='{enable}'[{out_label}]",
         )
         prev_label = out_label
 
@@ -701,32 +664,67 @@ class ReactionPipeline:
         self._log.info("Synthesized %d TTS segment(s).", len(tts_pairs))
 
         # Step 5: Render peanut animation segments
-        use_wav2lip = job.use_wav2lip and job.peanut_face_image and job.peanut_face_image.exists()
+        # Determine renderer type
+        renderer = job.renderer
+        if job.use_wav2lip:
+            renderer = "wav2lip"
+
+        use_cartoon = (renderer == "cartoon")
+        use_wav2lip = (renderer == "wav2lip") and job.peanut_face_image and job.peanut_face_image.exists()
+
+        if use_cartoon:
+            from peanut_reacts.character.cartoon_renderer import (
+                CartoonRendererConfig, render_cartoon_segment, render_idle_loop,
+            )
+            cartoon_cfg = CartoonRendererConfig(canvas_size=job.peanut_canvas, fps=job.peanut_fps)
+            self._log.info("Using cartoon expression renderer (6 emotions)")
+
+        eye_region = None
+        source_image_size = 1024
 
         if use_wav2lip:
             from peanut_reacts.character.wav2lip_sync import wav2lip_available, render_lipsync_reaction
             if not wav2lip_available():
-                self._log.warning("Wav2Lip not available — falling back to PIL renderer.")
+                self._log.warning("Wav2Lip not available — falling back to cartoon renderer.")
                 use_wav2lip = False
+                use_cartoon = True
+                from peanut_reacts.character.cartoon_renderer import (
+                    CartoonRendererConfig, render_cartoon_segment, render_idle_loop,
+                )
+                cartoon_cfg = CartoonRendererConfig(canvas_size=job.peanut_canvas, fps=job.peanut_fps)
+            else:
+                # Detect eye regions for animation overlay
+                try:
+                    from peanut_reacts.character.eye_animator import detect_eye_regions
+                    from PIL import Image as _PILImage
+                    _img = _PILImage.open(job.peanut_face_image)
+                    source_image_size = _img.width
+                    eye_region = detect_eye_regions(job.peanut_face_image)
+                    if eye_region:
+                        self._log.info(
+                            "Eye regions detected: L=%s R=%s (source %dpx)",
+                            eye_region.left_eye_center, eye_region.right_eye_center,
+                            source_image_size,
+                        )
+                except Exception as e:
+                    self._log.warning("Eye detection failed (continuing without): %s", e)
 
         # Step 5a: Idle peanut loop
         idle_path = work_dir / "peanut_idle_loop.mp4"
         if not idle_path.exists():
-            if use_wav2lip:
-                # For Wav2Lip: create an animated idle from the static face
-                # Add breathing zoom, gentle sway, and subtle movement
-                self._log.info("Creating animated idle peanut loop (4s) ...")
+            if use_cartoon:
+                self._log.info("Rendering cartoon idle loop (4s) ...")
+                render_idle_loop(idle_path, 4.0, config=cartoon_cfg)
+            elif use_wav2lip:
+                self._log.info("Creating Wav2Lip idle loop (4s) ...")
                 canvas = job.peanut_canvas
-                pad = canvas + 68  # extra space for sway + rotation
-                # Dramatic head sway + tilt for a "living" character feel
+                pad = canvas + 68
                 vf = (
                     f"scale={pad}:{pad}:force_original_aspect_ratio=decrease,"
                     f"pad={pad}:{pad}:(ow-iw)/2:(oh-ih)/2:color=0x00FF00,"
-                    # Head sway (left/right + up/down bobbing)
                     f"crop=w={canvas}:h={canvas}"
                     f":x='{(pad-canvas)//2}+18*sin(2*PI*t/2.5)'"
                     f":y='{(pad-canvas)//2}+12*sin(2*PI*t/1.8)',"
-                    # Head tilt rotation
                     f"rotate='0.03*sin(2*PI*t/3)':fillcolor=0x00FF00"
                     f":ow={canvas}:oh={canvas}"
                 )
@@ -739,15 +737,11 @@ class ReactionPipeline:
                     str(idle_path),
                 ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             else:
-                self._log.info("Rendering idle peanut loop (4s) ...")
+                self._log.info("Rendering PIL idle loop (4s) ...")
                 render_reaction_video(
-                    [],  # no speech events = mouth closed
-                    4.0,
-                    idle_path,
-                    fps=job.peanut_fps,
-                    canvas=job.peanut_canvas,
-                    char_size=job.peanut_char_size,
-                    seed=job.peanut_seed,
+                    [], 4.0, idle_path,
+                    fps=job.peanut_fps, canvas=job.peanut_canvas,
+                    char_size=job.peanut_char_size, seed=job.peanut_seed,
                     emotion="neutral",
                 )
 
@@ -767,8 +761,17 @@ class ReactionPipeline:
                 idx + 1, tts_result.duration, line.emotion,
             )
 
-            if use_wav2lip:
-                # Wav2Lip: animate face image with TTS audio
+            if use_cartoon:
+                # Cartoon renderer: swap expression image based on emotion
+                render_cartoon_segment(
+                    line.emotion,
+                    tts_result.duration + 0.3,
+                    webm_path,
+                    config=cartoon_cfg,
+                    speaking=True,
+                )
+            elif use_wav2lip:
+                # Wav2Lip: animate face image with TTS audio + eye animation
                 render_lipsync_reaction(
                     job.peanut_face_image,
                     tts_result.audio_path,
@@ -776,6 +779,9 @@ class ReactionPipeline:
                     tts_result.duration,
                     canvas_size=job.peanut_canvas,
                     green_screen=True,
+                    emotion=line.emotion,
+                    eye_region=eye_region,
+                    source_image_size=source_image_size,
                 )
             else:
                 # PIL renderer: speech-synced cartoon peanut
