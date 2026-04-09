@@ -293,6 +293,7 @@ def _build_user_message(
 
     if highlights:
         parts.append("VIEWER HIGHLIGHTS (moments the audience loved, ranked by engagement):")
+        parts.append("USE THESE to fuel Peanut's reactions — reference what viewers said, agree/disagree with them, read comments aloud sometimes.")
         for i, h in enumerate(highlights, 1):
             samples = "; ".join(f'"{s[:80]}"' for s in h.sample_comments[:3])
             parts.append(
@@ -302,6 +303,12 @@ def _build_user_message(
         parts.append("")
 
     parts.append("Generate Peanut's reactions to this video.")
+    parts.append(
+        "IMPORTANT: Reference specific comments when relevant — say things like "
+        "'The comments are going crazy about this!' or 'Someone said [quote comment] "
+        "and honestly? They're right.' Make Peanut feel like he's reading the "
+        "comments AND watching the video simultaneously."
+    )
     if not highlights:
         parts.append(
             "Focus on the most interesting transcript moments — look for "

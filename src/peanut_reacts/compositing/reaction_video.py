@@ -69,7 +69,8 @@ class ReactionJob:
     # Character rendering
     renderer: str = "cartoon"            # "cartoon" (expression swap), "wav2lip", or "pil"
     use_wav2lip: bool = False            # legacy: same as renderer="wav2lip"
-    peanut_face_image: Optional[Path] = None  # face image for Wav2Lip
+    peanut_face_image: Optional[Path] = None  # neutral face image
+    peanut_speaking_image: Optional[Path] = None  # speaking/open-mouth face image
     peanut_fps: int = 25
     peanut_canvas: int = 512
     peanut_char_size: int = 420
@@ -77,8 +78,8 @@ class ReactionJob:
 
     # Compositing layout
     layout: LayoutConfig = field(default_factory=LayoutConfig)
-    reaction_volume: float = 0.85
-    original_duck: float = 0.25  # reduce original to 25% when peanut speaks
+    reaction_volume: float = 2.5   # boost peanut voice (TTS is quieter than video audio)
+    original_duck: float = 0.15    # reduce original to 15% when peanut speaks
 
     # Speaker diarization (color-coded subtitles)
     enable_diarization: bool = False
@@ -380,7 +381,7 @@ def _final_composite(
         ])
     else:
         cmd.extend([
-            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-c:v", "h264_nvenc", "-preset", "fast", "-b:v", "8M", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k",
             str(output_path),
         ])
@@ -670,9 +671,13 @@ class ReactionPipeline:
             renderer = "wav2lip"
 
         use_cartoon = (renderer == "cartoon")
+        use_burnt = (renderer == "burnt_peanut") and job.peanut_face_image and job.peanut_speaking_image
         use_wav2lip = (renderer == "wav2lip") and job.peanut_face_image and job.peanut_face_image.exists()
 
-        if use_cartoon:
+        if use_burnt:
+            from peanut_reacts.character.peanut_animator import render_peanut_idle, render_peanut_speaking
+            self._log.info("Using Burnt Peanut renderer (neutral + speaking images)")
+        elif use_cartoon:
             from peanut_reacts.character.cartoon_renderer import (
                 CartoonRendererConfig, render_cartoon_segment, render_idle_loop,
             )
@@ -712,7 +717,10 @@ class ReactionPipeline:
         # Step 5a: Idle peanut loop
         idle_path = work_dir / "peanut_idle_loop.mp4"
         if not idle_path.exists():
-            if use_cartoon:
+            if use_burnt:
+                self._log.info("Rendering Burnt Peanut idle loop (4s) ...")
+                render_peanut_idle(job.peanut_face_image, idle_path, duration=4.0, canvas=job.peanut_canvas)
+            elif use_cartoon:
                 self._log.info("Rendering cartoon idle loop (4s) ...")
                 render_idle_loop(idle_path, 4.0, config=cartoon_cfg)
             elif use_wav2lip:
@@ -761,7 +769,18 @@ class ReactionPipeline:
                 idx + 1, tts_result.duration, line.emotion,
             )
 
-            if use_cartoon:
+            if use_burnt:
+                # Burnt Peanut: speaking face with emotion-specific movement
+                render_peanut_speaking(
+                    job.peanut_face_image,
+                    job.peanut_speaking_image,
+                    tts_result.audio_path,
+                    webm_path,
+                    tts_result.duration + 0.3,
+                    canvas=job.peanut_canvas,
+                    emotion=line.emotion,
+                )
+            elif use_cartoon:
                 # Cartoon renderer: swap expression image based on emotion
                 render_cartoon_segment(
                     line.emotion,

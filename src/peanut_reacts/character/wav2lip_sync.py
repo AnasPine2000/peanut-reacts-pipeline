@@ -130,6 +130,9 @@ def render_lipsync_reaction(
     *,
     canvas_size: int = 512,
     green_screen: bool = True,
+    emotion: str = "neutral",
+    eye_region=None,
+    source_image_size: int = 1024,
 ) -> Path:
     """Render a lip-synced peanut reaction segment.
 
@@ -184,6 +187,22 @@ def render_lipsync_reaction(
 
     # Cleanup raw
     raw_output.unlink(missing_ok=True)
+
+    # Step 3: Add eye animation overlay (blinking + expression)
+    if eye_region is not None:
+        from peanut_reacts.character.eye_animator import add_eye_animation_to_video
+
+        eye_output = output_path.with_name(output_path.stem + "_eyes.mp4")
+        add_eye_animation_to_video(
+            output_path, eye_output, eye_region,
+            duration=duration, fps=25, canvas_size=canvas_size,
+            source_image_size=source_image_size,
+            emotion=emotion,
+        )
+        # Replace original with eye-animated version
+        output_path.unlink(missing_ok=True)
+        eye_output.rename(output_path)
+        logger.info("Added eye animation (%s) to %s", emotion, output_path.name)
 
     logger.info("Lip-synced segment: %s (%.2fs)", output_path.name, duration)
     return output_path
