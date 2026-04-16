@@ -1,0 +1,431 @@
+{
+  "generated_at": "2026-04-16T11:25:48.012169",
+  "days_active": 3,
+  "current_month": 0,
+  "network": {
+    "total_channels": 7,
+    "active_channels": 3,
+    "total_subscribers": 2652,
+    "total_views": 1606467,
+    "total_videos": 154
+  },
+  "projections": {
+    "current_month_target": 0,
+    "cumulative_target": 0,
+    "on_track": true,
+    "targets": {
+      "0": 0,
+      "1": 0,
+      "2": 0,
+      "3": 70,
+      "4": 165,
+      "5": 395,
+      "6": 670,
+      "7": 1130,
+      "8": 1660,
+      "9": 2360,
+      "10": 3410,
+      "11": 4580,
+      "12": 6200
+    }
+  },
+  "channels": [
+    {
+      "id": "uk_clips",
+      "name": "UK CLIPS (Peanut Reacts)",
+      "character": "peanut",
+      "source_type": "playlist",
+      "schedule": "0 9 * * 1,3,5",
+      "youtube_url": "https://www.youtube.com/@wsidemen",
+      "tiktok_url": "",
+      "youtube": {
+        "exists": true,
+        "title": "UK CLIPS",
+        "subscriber_count": 2650,
+        "view_count": 1606467,
+        "video_count": 125,
+        "thumbnail": "https://yt3.ggpht.com/GSfoNKZLLm8U1YfIX2ErR3WY3CywSGtTlIp9vaI3Ty9JAxngLDpE_jIYrszT6caZKVPRdtL-K78=s88-c-k-c0x00ffffff-no-rj",
+        "description": "Peanut Reacts to Sidemen Among Us! An AI-animated peanut character reacts to every moment with dynamic emotions. Mega compilations, reaction videos, and Shorts.\n\nNew videos every Monday, Wednesday & F",
+        "latest_videos": [
+          {
+            "id": "fH8pT8-04DQ",
+            "title": "8 HOURS OF SIDEMEN AMONG US 2026 | DYNAMIC PEANUT REACTS (NO ADS)",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=fH8pT8-04DQ",
+            "published": "2026-04-16T11:15:57Z"
+          },
+          {
+            "id": "00LRHa_OKJ4",
+            "title": "Peanut Reacts to The SIDEMEN play AMONG US (Sidemen Gaming) | Peanut Reacts",
+            "views": 5,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=00LRHa_OKJ4",
+            "published": "2026-04-15T12:41:54Z"
+          },
+          {
+            "id": "YcY8kRw-8_U",
+            "title": "Peanut Reacts to Sidemen Among Us - 24/7 LIVE Marathon",
+            "views": 21,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=YcY8kRw-8_U",
+            "published": "2026-04-14T12:53:55Z"
+          },
+          {
+            "id": "w9Q9bVO2N1M",
+            "title": "3 HOURS of Sidemen Among Us | Peanut Reacts Compilation 2026",
+            "views": 13,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=w9Q9bVO2N1M",
+            "published": "2026-04-14T01:06:36Z"
+          },
+          {
+            "id": "lqcrSzrbZXk",
+            "title": "7 HOURS of Miniminter Reacts to Sidemen Among Us | Peanut Reacts 2026",
+            "views": 37,
+            "likes": 1,
+            "url": "https://youtube.com/watch?v=lqcrSzrbZXk",
+            "published": "2026-04-13T18:34:44Z"
+          }
+        ]
+      },
+      "pipeline_jobs": [
+        {
+          "id": 9,
+          "channel_id": "uk_clips",
+          "video_id": "r1l5SQcCTaU",
+          "title": "5 HOURS OF SIDEMEN AMONG US CHAOS MODE",
+          "status": "failed",
+          "step": "download",
+          "error_msg": "Command '['yt-dlp', '-f', 'bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4][height<=1080]/best[height<=1080]', '--merge-output-format', 'mp4', '--write-auto-sub', '--sub-lang', 'en', '--convert-subs', 'srt', '-o', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\downloads\\\\r1l5SQcCTaU.mp4', 'https://youtube.com/watch?v=r1l5SQcCTaU']' returned non-zero exit status 3221225794.",
+          "created_at": "2026-04-16T04:24:10.242904",
+          "started_at": "2026-04-16T04:24:10.258778",
+          "completed_at": "2026-04-16T04:24:10.322494",
+          "output_path": null,
+          "youtube_url": null
+        },
+        {
+          "id": 8,
+          "channel_id": "uk_clips",
+          "video_id": "TgX-c8WCRZE",
+          "title": "THE SIDEMEN AMONG US MOVIE: PROXIMITY CHAT EDITION",
+          "status": "failed",
+          "step": "composite",
+          "error_msg": "Command '['ffmpeg', '-y', '-i', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\downloads\\\\TgX-c8WCRZE.mp4', '-i', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\mixed_audio.aac', '-c:v', 'h264_nvenc', '-c:a', 'aac', '-map', '0:v', '-map', '1:a', '-shortest', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\TgX-c8WCRZE_reaction.mp4']' returned non-zero exit status 3221225794.",
+          "created_at": "2026-04-15T21:05:39.896705",
+          "started_at": "2026-04-15T21:05:39.906140",
+          "completed_at": "2026-04-16T04:24:10.226776",
+          "output_path": null,
+          "youtube_url": null
+        },
+        {
+          "id": 7,
+          "channel_id": "uk_clips",
+          "video_id": "hJ_0vSSZ_LY",
+          "title": "SIDEMEN play AMONG US but everyone has -200 IQ (Sidemen Gaming)",
+          "status": "failed",
+          "step": "composite",
+          "error_msg": "Command '['ffmpeg', '-y', '-i', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\downloads\\\\hJ_0vSSZ_LY.mp4', '-i', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\mixed_audio.aac', '-c:v', 'h264_nvenc', '-c:a', 'aac', '-map', '0:v', '-map', '1:a', '-shortest', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\hJ_0vSSZ_LY_reaction.mp4']' timed out after -26337.890999999996 seconds",
+          "created_at": "2026-04-15T12:40:24.372383",
+          "started_at": "2026-04-15T12:40:24.375475",
+          "completed_at": "2026-04-15T21:05:38.363950",
+          "output_path": null,
+          "youtube_url": null
+        },
+        {
+          "id": 6,
+          "channel_id": "uk_clips",
+          "video_id": "r1l5SQcCTaU",
+          "title": "5 HOURS OF SIDEMEN AMONG US CHAOS MODE",
+          "status": "failed",
+          "step": "download",
+          "error_msg": "Command '['yt-dlp', '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]', '--merge-output-format', 'mp4', '--write-auto-sub', '--sub-lang', 'en', '--convert-subs', 'srt', '-o', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\downloads\\\\r1l5SQcCTaU.mp4', 'https://youtube.com/watch?v=r1l5SQcCTaU']' returned non-zero exit status 1.",
+          "created_at": "2026-04-15T12:27:14.653890",
+          "started_at": "2026-04-15T12:27:14.653890",
+          "completed_at": "2026-04-15T12:30:07.669101",
+          "output_path": null,
+          "youtube_url": null
+        },
+        {
+          "id": 5,
+          "channel_id": "uk_clips",
+          "video_id": "E9bdMxOpm88",
+          "title": "The SIDEMEN play AMONG US (Sidemen Gaming)",
+          "status": "done",
+          "step": "complete",
+          "error_msg": null,
+          "created_at": "2026-04-15T12:24:35.673605",
+          "started_at": "2026-04-15T12:24:35.686589",
+          "completed_at": "2026-04-15T12:40:24.356664",
+          "output_path": "C:\\Users\\anasm\\Videos\\4K Video Downloader+\\production\\uk_clips\\E9bdMxOpm88_reaction.mp4",
+          "youtube_url": "https://www.youtube.com/watch?v=00LRHa_OKJ4"
+        },
+        {
+          "id": 4,
+          "channel_id": "uk_clips",
+          "video_id": "TgX-c8WCRZE",
+          "title": "THE SIDEMEN AMONG US MOVIE: PROXIMITY CHAT EDITION",
+          "status": "failed",
+          "step": "download",
+          "error_msg": "Command '['yt-dlp', '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]', '--merge-output-format', 'mp4', '--write-auto-sub', '--sub-lang', 'en', '--convert-subs', 'srt', '-o', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\downloads\\\\TgX-c8WCRZE.mp4', 'https://youtube.com/watch?v=TgX-c8WCRZE']' returned non-zero exit status 1.",
+          "created_at": "2026-04-15T12:20:31.388233",
+          "started_at": "2026-04-15T12:20:31.388233",
+          "completed_at": "2026-04-15T12:27:14.638068",
+          "output_path": null,
+          "youtube_url": null
+        },
+        {
+          "id": 3,
+          "channel_id": "uk_clips",
+          "video_id": "hJ_0vSSZ_LY",
+          "title": "SIDEMEN play AMONG US but everyone has -200 IQ (Sidemen Gaming)",
+          "status": "failed",
+          "step": "download",
+          "error_msg": "Command '['yt-dlp', '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]', '--merge-output-format', 'mp4', '--write-auto-sub', '--sub-lang', 'en', '--convert-subs', 'srt', '-o', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\downloads\\\\hJ_0vSSZ_LY.mp4', 'https://youtube.com/watch?v=hJ_0vSSZ_LY']' returned non-zero exit status 1.",
+          "created_at": "2026-04-15T12:20:08.442534",
+          "started_at": "2026-04-15T12:20:08.442534",
+          "completed_at": "2026-04-15T12:20:30.004179",
+          "output_path": null,
+          "youtube_url": null
+        },
+        {
+          "id": 2,
+          "channel_id": "uk_clips",
+          "video_id": "E9bdMxOpm88",
+          "title": "The SIDEMEN play AMONG US (Sidemen Gaming)",
+          "status": "failed",
+          "step": "download",
+          "error_msg": "Command '['yt-dlp', '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]', '--merge-output-format', 'mp4', '--write-auto-sub', '--sub-lang', 'en', '--convert-subs', 'srt', '-o', 'C:\\\\Users\\\\anasm\\\\Videos\\\\4K Video Downloader+\\\\production\\\\uk_clips\\\\downloads\\\\E9bdMxOpm88.mp4', 'https://youtube.com/watch?v=E9bdMxOpm88']' returned non-zero exit status 1.",
+          "created_at": "2026-04-15T12:19:46.321096",
+          "started_at": "2026-04-15T12:19:46.326095",
+          "completed_at": "2026-04-15T12:20:08.426879",
+          "output_path": null,
+          "youtube_url": null
+        },
+        {
+          "id": 1,
+          "channel_id": "uk_clips",
+          "video_id": "test123",
+          "title": "Test Video",
+          "status": "done",
+          "step": "complete",
+          "error_msg": null,
+          "created_at": "2026-04-13T16:41:02.218396",
+          "started_at": null,
+          "completed_at": "2026-04-13T16:41:02.234779",
+          "output_path": "production/test.mp4",
+          "youtube_url": "https://youtube.com/watch?v=test"
+        }
+      ]
+    },
+    {
+      "id": "hasanabi_archive",
+      "name": "HasanAbi Archive",
+      "character": "chilli",
+      "source_type": "hasan_archive",
+      "schedule": "0 10 * * *",
+      "youtube_url": "https://www.youtube.com/channel/UCAkPwkYDPPpGjsdqszEjLLQ",
+      "tiktok_url": "https://www.tiktok.com/@youtubers.archive",
+      "youtube": {
+        "exists": true,
+        "title": "UKCLIPS",
+        "subscriber_count": 0,
+        "view_count": 0,
+        "video_count": 12,
+        "thumbnail": "https://yt3.ggpht.com/ytc/AIdro_mAWg58IBKXFhu4bm3kI7I_ZggqkEUt9om22H0cLhyfl1LXB0Qf2Vc0JGtOYc7FAYKWCA=s88-c-k-c0x00ffffff-no-rj",
+        "description": "Daily HasanAbi stream clips and highlights. The best moments from Hasan Piker Twitch streams, segmented by topic.\n\nNew clips posted DAILY!\n\nTopics: Politics, Drama, Reactions, Debates, Current Events\n",
+        "latest_videos": [
+          {
+            "id": "DVpnCVlVg58",
+            "title": "ABSOLUTE SCENES | HasanAbi Yale Debate #shorts #hasanabi",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=DVpnCVlVg58",
+            "published": "2026-04-16T11:20:45Z"
+          },
+          {
+            "id": "7pc6zW8sQmg",
+            "title": "HASAN GOES WILD AT YALE DEBATE PART 2",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=7pc6zW8sQmg",
+            "published": "2026-04-16T11:20:37Z"
+          },
+          {
+            "id": "gVNani9h1Gc",
+            "title": "ABSOLUTE SCENES | HasanAbi Yale Debate #shorts #hasanabi",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=gVNani9h1Gc",
+            "published": "2026-04-16T11:02:55Z"
+          },
+          {
+            "id": "bWNxqAvWy58",
+            "title": "HASAN GOES WILD At Yale Debate!",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=bWNxqAvWy58",
+            "published": "2026-04-16T11:02:15Z"
+          },
+          {
+            "id": "fz93Ytazhsg",
+            "title": "LMAOOO | HasanAbi 03 Part 4 #shorts #hasanabi #politics",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=fz93Ytazhsg",
+            "published": "2026-04-16T10:21:15Z"
+          }
+        ]
+      },
+      "pipeline_jobs": [
+        {
+          "id": 11,
+          "channel_id": "hasanabi_archive",
+          "video_id": "ml563eYaSZI",
+          "title": "Hasan Goes WILD At The Yale Debate",
+          "status": "done",
+          "step": "complete",
+          "error_msg": null,
+          "created_at": "2026-04-16T08:28:12.701959",
+          "started_at": "2026-04-16T08:28:12.715960",
+          "completed_at": "2026-04-16T10:10:23.453093",
+          "output_path": "C:\\Users\\anasm\\Videos\\4K Video Downloader+\\production\\hasanabi_archive",
+          "youtube_url": ""
+        },
+        {
+          "id": 10,
+          "channel_id": "hasanabi_archive",
+          "video_id": "jYGHXfHp-2Y",
+          "title": "HasanAbi April 16, 2026 \u2013 Hasan\u2019s Yale Trip Is Making Democrats Panic",
+          "status": "done",
+          "step": "complete",
+          "error_msg": null,
+          "created_at": "2026-04-16T08:16:50.975872",
+          "started_at": "2026-04-16T08:16:50.990673",
+          "completed_at": "2026-04-16T08:27:18.362191",
+          "output_path": "C:\\Users\\anasm\\Videos\\4K Video Downloader+\\production\\hasanabi_archive",
+          "youtube_url": ""
+        }
+      ]
+    },
+    {
+      "id": "lofi_vibes",
+      "name": "Lofi Vibes",
+      "character": "marshmallow",
+      "source_type": "lofi",
+      "schedule": "0 0 * * 1",
+      "youtube_url": "",
+      "tiktok_url": "",
+      "youtube": {
+        "exists": false
+      },
+      "pipeline_jobs": []
+    },
+    {
+      "id": "cozy_ambient",
+      "name": "Cozy Ambient Soundscapes",
+      "character": "marshmallow",
+      "source_type": "ambient",
+      "schedule": "0 6 * * 0",
+      "youtube_url": "",
+      "tiktok_url": "",
+      "youtube": {
+        "exists": false
+      },
+      "pipeline_jobs": []
+    },
+    {
+      "id": "peanut_stories",
+      "name": "Peanut Stories",
+      "character": "cashew",
+      "source_type": "reddit",
+      "schedule": "0 8 * * *",
+      "youtube_url": "",
+      "tiktok_url": "",
+      "youtube": {
+        "exists": false
+      },
+      "pipeline_jobs": []
+    },
+    {
+      "id": "peanut_ksi",
+      "name": "Peanut Reacts (KSI)",
+      "character": "pistachio",
+      "source_type": "playlist",
+      "schedule": "0 14 * * 2,4,6",
+      "youtube_url": "",
+      "tiktok_url": "",
+      "youtube": {
+        "exists": false
+      },
+      "pipeline_jobs": []
+    },
+    {
+      "id": "peanut_tiktok_reacts",
+      "name": "Peanut TikTok Reacts",
+      "character": "peanut",
+      "source_type": "playlist",
+      "schedule": "0 11 * * *",
+      "youtube_url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
+      "tiktok_url": "",
+      "youtube": {
+        "exists": true,
+        "title": "Peanut Reacts",
+        "subscriber_count": 2,
+        "view_count": 0,
+        "video_count": 17,
+        "thumbnail": "https://yt3.ggpht.com/ytc/AIdro_mymR-MbSZiXcxemf76BWkS2_J1h-FgBePsVD9r7FjOXZDjU4qX1ONi8S2eqHfN6i8s0w=s88-c-k-c0x00ffffff-no-rj",
+        "description": "Peanut reacts to the MOST VIRAL TikToks! An animated peanut character watches trending, funny, and cute TikToks with hilarious reactions.\n\nNew Shorts DAILY!\n\nSubscribe for daily Peanut reactions to th",
+        "latest_videos": [
+          {
+            "id": "LPxEsMhnoZs",
+            "title": "Peanut: NO WAY THATS REAL | Viral TikTok Reaction #shorts #fyp",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=LPxEsMhnoZs",
+            "published": "2026-04-16T11:07:00Z"
+          },
+          {
+            "id": "dofXCsrIhck",
+            "title": "Peanut: I CANT STOP LAUGHING | Viral TikTok Reaction #shorts #fyp",
+            "views": 0,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=dofXCsrIhck",
+            "published": "2026-04-16T11:06:33Z"
+          },
+          {
+            "id": "yYtcHnXeMtk",
+            "title": "Peanut: WHAT IS THIS! | Viral TikTok Reaction #shorts #fyp",
+            "views": 1,
+            "likes": 1,
+            "url": "https://youtube.com/watch?v=yYtcHnXeMtk",
+            "published": "2026-04-16T11:06:22Z"
+          },
+          {
+            "id": "Eb37bW0nL1k",
+            "title": "Peanut Reacts: HAHAHA | Viral TikTok #shorts #fyp #viral #peanutreacts",
+            "views": 2,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=Eb37bW0nL1k",
+            "published": "2026-04-16T10:47:34Z"
+          },
+          {
+            "id": "mE2h6V2gBDs",
+            "title": "Peanut Reacts: LETS GOOO | Viral TikTok #shorts #fyp #viral #peanutreacts",
+            "views": 1,
+            "likes": 0,
+            "url": "https://youtube.com/watch?v=mE2h6V2gBDs",
+            "published": "2026-04-16T10:47:29Z"
+          }
+        ]
+      },
+      "pipeline_jobs": []
+    }
+  ],
+  "links": {
+    "livestream": "https://youtube.com/watch?v=YcY8kRw-8_U",
+    "dashboard": "https://ananas4444.github.io/peanut-reacts-pipeline/",
+    "hf_space": "https://huggingface.co/spaces/Ananas4444/peanut-reacts-dashboard",
+    "github": "https://github.com/AnasPine2000/peanut-reacts-pipeline"
+  }
+}

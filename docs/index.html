@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peanut Reacts — Network Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0f1117; --card: #1a1d27; --card-hover: #22263a;
+            --border: #2a2e3e; --text: #e4e6eb; --text-muted: #8b8fa3;
+            --accent: #d4a574; --green: #22c55e; --red: #ef4444;
+            --blue: #3b82f6; --purple: #a855f7; --orange: #f59e0b;
+        }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        .header { text-align: center; padding: 30px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 30px; }
+        .header h1 { font-size: 2.2rem; margin-bottom: 8px; }
+        .header h1 span { color: var(--accent); }
+        .header p { color: var(--text-muted); font-size: 1rem; }
+        .header .links { margin-top: 12px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .header .links a { color: var(--blue); text-decoration: none; font-size: 0.85rem; padding: 4px 12px; border: 1px solid var(--border); border-radius: 20px; }
+        .header .links a:hover { background: var(--card); }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 30px; }
+        .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+        .stat-card .label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.blue .value { color: var(--blue); }
+        .stat-card.purple .value { color: var(--purple); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 0; flex-wrap: wrap; }
+        .tab { padding: 10px 20px; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; font-size: 0.95rem; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Channel Cards */
+        .channel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; }
+        .channel-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; transition: all 0.2s; }
+        .channel-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .channel-card .ch-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .channel-card .ch-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+        .channel-card .ch-name { font-size: 1.1rem; font-weight: 600; }
+        .channel-card .ch-type { font-size: 0.8rem; color: var(--text-muted); }
+        .channel-card .ch-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+        .channel-card .ch-stat { text-align: center; padding: 8px; background: var(--bg); border-radius: 8px; }
+        .channel-card .ch-stat .num { font-weight: 700; font-size: 1.1rem; }
+        .channel-card .ch-stat .lbl { font-size: 0.7rem; color: var(--text-muted); }
+        .channel-card .ch-links { display: flex; gap: 8px; margin-top: 12px; }
+        .channel-card .ch-links a { padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; text-decoration: none; border: 1px solid var(--border); color: var(--text); }
+        .channel-card .ch-links a:hover { background: var(--card-hover); }
+        .channel-card .ch-links a.yt { border-color: #c4302b; color: #ff4444; }
+        .channel-card .ch-links a.tt { border-color: #ff0050; color: #ff0050; }
+        .channel-card .ch-schedule { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+        .channel-card .ch-videos { margin-top: 12px; }
+        .channel-card .ch-videos .vid { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border); font-size: 0.82rem; }
+        .channel-card .ch-videos .vid a { color: var(--blue); text-decoration: none; }
+        .channel-card .ch-videos .vid .views { color: var(--text-muted); }
+
+        /* Projections */
+        .projection-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .projection-card h3 { margin-bottom: 16px; font-size: 1.1rem; }
+        .progress-bar { height: 12px; background: var(--bg); border-radius: 6px; overflow: hidden; margin: 8px 0; }
+        .progress-bar .fill { height: 100%; border-radius: 6px; transition: width 0.5s; }
+        .progress-bar .fill.green { background: var(--green); }
+        .progress-bar .fill.orange { background: var(--orange); }
+        .progress-bar .fill.red { background: var(--red); }
+        .milestone-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        .milestone-table th, .milestone-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .milestone-table th { color: var(--text-muted); font-weight: 500; }
+
+        /* Charts */
+        .chart-container { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .chart-row { grid-template-columns: 1fr; } }
+
+        /* Status badges */
+        .badge { padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+        .badge.live { background: #22c55e22; color: var(--green); }
+        .badge.pending { background: #f59e0b22; color: var(--orange); }
+        .badge.offline { background: #ef444422; color: var(--red); }
+
+        .updated { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 30px; padding: 20px; border-top: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🥜 <span>Peanut Reacts</span> — Network Dashboard</h1>
+            <p>Autonomous multi-channel YouTube content pipeline</p>
+            <div class="links" id="header-links"></div>
+        </div>
+
+        <div class="stats-grid" id="stats-grid"></div>
+
+        <div class="tabs" id="tabs">
+            <div class="tab active" data-tab="channels">📺 Channels</div>
+            <div class="tab" data-tab="projections">📈 Projections</div>
+            <div class="tab" data-tab="analytics">📊 Analytics</div>
+            <div class="tab" data-tab="pipeline">🔧 Pipeline</div>
+        </div>
+
+        <div id="tab-channels" class="tab-content active">
+            <div class="channel-grid" id="channel-grid"></div>
+        </div>
+
+        <div id="tab-projections" class="tab-content">
+            <div id="projections-content"></div>
+        </div>
+
+        <div id="tab-analytics" class="tab-content">
+            <div class="chart-row">
+                <div class="chart-container"><canvas id="subsChart"></canvas></div>
+                <div class="chart-container"><canvas id="viewsChart"></canvas></div>
+            </div>
+            <div class="chart-container"><canvas id="revenueChart"></canvas></div>
+        </div>
+
+        <div id="tab-pipeline" class="tab-content">
+            <div id="pipeline-content"></div>
+        </div>
+
+        <div class="updated" id="updated"></div>
+    </div>
+
+    <script>
+    let DATA = null;
+
+    async function loadData() {
+        try {
+            const resp = await fetch('data.json?' + Date.now());
+            DATA = await resp.json();
+            render();
+        } catch(e) {
+            document.getElementById('stats-grid').innerHTML = '<p style="color:var(--red);padding:20px">Failed to load data.json</p>';
+        }
+    }
+
+    function fmt(n) {
+        if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+        return n.toString();
+    }
+
+    function render() {
+        const d = DATA;
+        const net = d.network;
+
+        // Header links
+        document.getElementById('header-links').innerHTML = `
+            ${d.links.github ? `<a href="${d.links.github}" target="_blank">GitHub</a>` : ''}
+            ${d.links.livestream ? `<a href="${d.links.livestream}" target="_blank">24/7 Livestream</a>` : ''}
+            ${d.links.hf_space ? `<a href="${d.links.hf_space}" target="_blank">HF Dashboard</a>` : ''}
+        `;
+
+        // Stats
+        document.getElementById('stats-grid').innerHTML = `
+            <div class="stat-card"><div class="value">${net.active_channels}/${net.total_channels}</div><div class="label">Active Channels</div></div>
+            <div class="stat-card green"><div class="value">${fmt(net.total_subscribers)}</div><div class="label">Total Subscribers</div></div>
+            <div class="stat-card blue"><div class="value">${fmt(net.total_views)}</div><div class="label">Total Views</div></div>
+            <div class="stat-card purple"><div class="value">${net.total_videos}</div><div class="label">Total Videos</div></div>
+            <div class="stat-card"><div class="value">${d.days_active}</div><div class="label">Days Active</div></div>
+            <div class="stat-card"><div class="value">M${d.current_month}</div><div class="label">Current Month</div></div>
+        `;
+
+        renderChannels();
+        renderProjections();
+        renderAnalytics();
+        renderPipeline();
+
+        document.getElementById('updated').textContent = `Last updated: ${new Date(d.generated_at).toLocaleString()} | Auto-refreshes every 5 minutes`;
+    }
+
+    function renderChannels() {
+        const grid = document.getElementById('channel-grid');
+        const chars = { peanut: '🥜', chilli: '🌶️', marshmallow: '☁️', cashew: '🥜', pistachio: '🟢', walnut: '🧠' };
+        const colors = { peanut: '#D4A574', chilli: '#E74C3C', marshmallow: '#F8F0E3', cashew: '#DAA520', pistachio: '#93C572' };
+
+        grid.innerHTML = DATA.channels.map(ch => {
+            const yt = ch.youtube;
+            const emoji = chars[ch.character] || '❓';
+            const status = yt.exists ? 'live' : 'pending';
+            const statusLabel = yt.exists ? 'LIVE' : 'NOT LINKED';
+
+            let videosHtml = '';
+            if (yt.latest_videos && yt.latest_videos.length > 0) {
+                videosHtml = '<div class="ch-videos">' +
+                    yt.latest_videos.slice(0, 3).map(v =>
+                        `<div class="vid"><a href="${v.url}" target="_blank">${v.title.slice(0,45)}...</a><span class="views">${fmt(v.views)} views</span></div>`
+                    ).join('') + '</div>';
+            }
+
+            return `
+                <div class="channel-card">
+                    <div class="ch-header">
+                        <div class="ch-avatar" style="background:${colors[ch.character] || '#888'}">${emoji}</div>
+                        <div>
+                            <div class="ch-name">${ch.name} <span class="badge ${status}">${statusLabel}</span></div>
+                            <div class="ch-type">${ch.source_type} • ${ch.character}</div>
+                        </div>
+                    </div>
+                    ${yt.exists ? `
+                        <div class="ch-stats">
+                            <div class="ch-stat"><div class="num">${fmt(yt.subscriber_count)}</div><div class="lbl">Subscribers</div></div>
+                            <div class="ch-stat"><div class="num">${fmt(yt.view_count)}</div><div class="lbl">Views</div></div>
+                            <div class="ch-stat"><div class="num">${yt.video_count}</div><div class="lbl">Videos</div></div>
+                        </div>
+                    ` : '<div style="padding:16px 0;color:var(--text-muted);font-size:0.85rem">Channel not yet created</div>'}
+                    <div class="ch-links">
+                        ${ch.youtube_url ? `<a class="yt" href="${ch.youtube_url}" target="_blank">▶ YouTube</a>` : ''}
+                        ${ch.tiktok_url ? `<a class="tt" href="${ch.tiktok_url}" target="_blank">♪ TikTok</a>` : ''}
+                    </div>
+                    <div class="ch-schedule">Schedule: <code>${ch.schedule || 'not set'}</code></div>
+                    ${videosHtml}
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderProjections() {
+        const p = DATA.projections;
+        const targets = p.targets;
+        const month = DATA.current_month;
+
+        let cumulative = 0;
+        let rows = '';
+        for (let i = 0; i <= 12; i++) {
+            cumulative += targets[i] || 0;
+            const isCurrent = i === month;
+            rows += `<tr style="${isCurrent ? 'background:var(--card-hover);font-weight:600' : ''}">
+                <td>Month ${i}${isCurrent ? ' ← NOW' : ''}</td>
+                <td>$${(targets[i] || 0).toLocaleString()}</td>
+                <td>$${cumulative.toLocaleString()}</td>
+                <td>${i <= 2 ? 'Building' : i <= 5 ? 'Early Revenue' : i <= 8 ? 'Scaling' : 'Full Network'}</td>
+            </tr>`;
+        }
+
+        // YPP progress
+        const watchHoursNeeded = 3000;
+        const subsNeeded = 500;
+        const currentSubs = DATA.network.total_subscribers;
+        const subsPct = Math.min(100, (currentSubs / subsNeeded) * 100);
+
+        document.getElementById('projections-content').innerHTML = `
+            <div class="projection-card">
+                <h3>YPP Progress (Expanded — Memberships + Super Chat)</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                    <div>
+                        <div style="font-size:0.85rem;color:var(--text-muted)">Subscribers: ${fmt(currentSubs)} / 500 needed</div>
+                        <div class="progress-bar"><div class="fill green" style="width:${subsPct}%"></div></div>
+                        <div style="font-size:0.8rem;color:${subsPct >= 100 ? 'var(--green)' : 'var(--orange)'}">
+                            ${subsPct >= 100 ? '✅ PASSED' : `${(500 - currentSubs)} more needed`}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.85rem;color:var(--text-muted)">Watch Hours: Accumulating via 24/7 livestream</div>
+                        <div class="progress-bar"><div class="fill orange" style="width:15%"></div></div>
+                        <div style="font-size:0.8rem;color:var(--orange)">~450 hrs estimated (need 3,000)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="projection-card">
+                <h3>Revenue Roadmap (Year 1)</h3>
+                <table class="milestone-table">
+                    <thead><tr><th>Month</th><th>Target</th><th>Cumulative</th><th>Phase</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function renderAnalytics() {
+        const channels = DATA.channels.filter(ch => ch.youtube.exists);
+
+        // Subscribers chart
+        new Chart(document.getElementById('subsChart'), {
+            type: 'bar',
+            data: {
+                labels: channels.map(ch => ch.name.slice(0, 20)),
+                datasets: [{
+                    label: 'Subscribers',
+                    data: channels.map(ch => ch.youtube.subscriber_count),
+                    backgroundColor: channels.map((_, i) => ['#D4A574', '#E74C3C', '#3b82f6', '#22c55e', '#a855f7'][i % 5]),
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { title: { display: true, text: 'Subscribers per Channel', color: '#e4e6eb' }, legend: { display: false } },
+                scales: { y: { ticks: { color: '#8b8fa3' }, grid: { color: '#2a2e3e' } }, x: { ticks: { color: '#8b8fa3' } } }
+            }
+        });
+
+        // Views chart
+        new Chart(document.getElementById('viewsChart'), {
+            type: 'bar',
+            data: {
+                labels: channels.map(ch => ch.name.slice(0, 20)),
+                datasets: [{
+                    label: 'Total Views',
+                    data: channels.map(ch => ch.youtube.view_count),
+                    backgroundColor: channels.map((_, i) => ['#D4A574', '#E74C3C', '#3b82f6'][i % 3]),
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { title: { display: true, text: 'Total Views per Channel', color: '#e4e6eb' }, legend: { display: false } },
+                scales: { y: { ticks: { color: '#8b8fa3', callback: v => fmt(v) }, grid: { color: '#2a2e3e' } }, x: { ticks: { color: '#8b8fa3' } } }
+            }
+        });
+
+        // Revenue projection chart
+        const targets = DATA.projections.targets;
+        const months = Array.from({length: 13}, (_, i) => i);
+        let cumul = 0;
+        const cumulData = months.map(i => { cumul += targets[i] || 0; return cumul; });
+
+        new Chart(document.getElementById('revenueChart'), {
+            type: 'line',
+            data: {
+                labels: months.map(i => `M${i}`),
+                datasets: [
+                    {
+                        label: 'Monthly Target ($)',
+                        data: months.map(i => targets[i] || 0),
+                        backgroundColor: '#D4A57444',
+                        borderColor: '#D4A574',
+                        fill: true, tension: 0.3,
+                    },
+                    {
+                        label: 'Cumulative ($)',
+                        data: cumulData,
+                        borderColor: '#22c55e',
+                        borderDash: [5, 5],
+                        tension: 0.3, yAxisID: 'y1',
+                    },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { title: { display: true, text: 'Revenue Projection — Year 1', color: '#e4e6eb' } },
+                scales: {
+                    y: { title: { display: true, text: 'Monthly ($)', color: '#8b8fa3' }, ticks: { color: '#8b8fa3' }, grid: { color: '#2a2e3e' } },
+                    y1: { position: 'right', title: { display: true, text: 'Cumulative ($)', color: '#8b8fa3' }, ticks: { color: '#8b8fa3' }, grid: { drawOnChartArea: false } },
+                    x: { ticks: { color: '#8b8fa3' } },
+                }
+            }
+        });
+    }
+
+    function renderPipeline() {
+        const allJobs = DATA.channels.flatMap(ch =>
+            (ch.pipeline_jobs || []).map(j => ({...j, channel: ch.name}))
+        ).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+        const statusIcon = { done: '✅', failed: '❌', running: '🔄', queued: '⏳' };
+
+        document.getElementById('pipeline-content').innerHTML = `
+            <div class="projection-card">
+                <h3>Recent Pipeline Jobs</h3>
+                <table class="milestone-table">
+                    <thead><tr><th>Status</th><th>Channel</th><th>Title</th><th>Step</th><th>Created</th></tr></thead>
+                    <tbody>
+                        ${allJobs.slice(0, 20).map(j => `
+                            <tr>
+                                <td>${statusIcon[j.status] || j.status}</td>
+                                <td>${j.channel}</td>
+                                <td>${(j.title || j.video_id || '?').slice(0, 40)}</td>
+                                <td><code>${j.step || '?'}</code></td>
+                                <td>${(j.created_at || '').slice(0, 16)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // Tabs
+    document.addEventListener('click', e => {
+        if (e.target.classList.contains('tab')) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            document.getElementById('tab-' + e.target.dataset.tab).classList.add('active');
+        }
+    });
+
+    // Load and auto-refresh
+    loadData();
+    setInterval(loadData, 300000); // 5 min
+    </script>
+</body>
+</html>
