@@ -79,6 +79,16 @@ class PipelineEngine:
             replace_existing=True,
         )
 
+        # Shorts posting — 5 times per day at optimal times
+        for hour in [7, 12, 18, 21, 23]:
+            self.scheduler.add_job(
+                self._post_shorts,
+                CronTrigger(hour=hour, minute=3),
+                id=f"shorts_post_{hour:02d}",
+                name=f"Post Shorts ({hour:02d}:03)",
+                replace_existing=True,
+            )
+
     def _run_channel(self, channel: ChannelConfig):
         """Execute the pipeline for a single channel."""
         log.info("Starting scheduled run for [%s]", channel.id)
@@ -112,6 +122,22 @@ class PipelineEngine:
         status_path = Path(__file__).resolve().parents[3] / "dashboard" / "status.json"
         status_path.parent.mkdir(exist_ok=True)
         status_path.write_text(json.dumps(status, indent=2, default=str))
+
+    def _post_shorts(self):
+        """Post due Shorts from the queue to YouTube + TikTok."""
+        log.info("Posting scheduled Shorts...")
+        try:
+            from peanut_reacts.scheduler.shorts_pipeline import run_shorts_posting_for_all
+            results = run_shorts_posting_for_all(self.config, self.config.settings)
+            total_yt = sum(r.get("posted_yt", 0) for r in results.values())
+            total_tt = sum(r.get("posted_tt", 0) for r in results.values())
+            total_err = sum(r.get("errors", 0) for r in results.values())
+            if total_yt + total_tt > 0:
+                log.info("Shorts posted: YT=%d, TT=%d, errors=%d", total_yt, total_tt, total_err)
+            else:
+                log.debug("No Shorts due for posting right now")
+        except Exception as e:
+            log.error("Shorts posting failed: %s", e)
 
     def _run_learning_loop(self):
         """Run the learning feedback loop for all channels with credentials."""
