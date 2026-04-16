@@ -31,12 +31,14 @@ channels:
     tags: ["sidemen", "among us", "peanut reacts", "reaction", "compilation", "gaming"]
 
   # ── Channel 2: HasanAbi Archive (Chilli) ─────────────────────
+  # Source: @HasanAbiArchivefan0 (full-length stream archives)
+  # Pipeline: download latest → segment by topic → upload 10-60 min clips → Shorts
   - id: hasanabi_archive
     name: "HasanAbi Archive"
     character: chilli
-    source_type: twitch_vod
+    source_type: hasan_archive
     source_urls:
-      - "hasanabi"
+      - "https://www.youtube.com/@HasanAbiArchivefan0/videos"
     tts_voice: "en-US-GuyNeural"
     tts_rate: "+5%"
     llm_personality: >
@@ -46,11 +48,12 @@ channels:
     schedule: "0 10 * * *"
     segment_by_topic: true
     min_segment_minutes: 10
-    max_segment_minutes: 30
-    oauth_token: "~/.peanut_reacts/tokens/hasanabi.json"
+    max_segment_minutes: 60
+    oauth_token: "~/.peanut_reacts/hasanabi_token.json"
+    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
     upload_privacy: public
-    max_segments_per_run: 5
-    tags: ["hasanabi", "hasan", "politics", "twitch", "reaction", "clips"]
+    max_segments_per_run: 10
+    tags: ["hasanabi", "hasan", "politics", "twitch", "reaction", "clips", "debate"]
 
   # ── Channel 3: Lofi Vibes (Marshmallow) ──────────────────────
   - id: lofi_vibes
@@ -142,6 +145,24 @@ channels:
     oauth_token: "~/.peanut_reacts/tokens/ksi.json"
     upload_privacy: public
     tags: ["ksi", "reaction", "peanut reacts", "compilation"]
+
+  # ── Channel 7: Peanut TikTok Reacts (clips UK) ───────────────
+  # Peanut reacts to viral TikToks — Shorts-first strategy
+  - id: peanut_tiktok_reacts
+    name: "Peanut TikTok Reacts"
+    character: peanut
+    source_type: playlist
+    source_urls: []
+    tts_voice: "en-GB-RyanNeural"
+    tts_rate: "+15%"
+    llm_personality: >
+      You are Peanut, an animated peanut reacting to the most viral TikToks.
+      React with shock, laughter, and pure hype. Keep it short and punchy.
+    schedule: "0 11 * * *"
+    oauth_token: "~/.peanut_reacts/peanut_tiktok_reacts_token.json"
+    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
+    upload_privacy: public
+    tags: ["peanut reacts", "tiktok", "viral", "reaction", "funny", "shorts", "trending"]
 
 # ── Global Settings ────────────────────────────────────────────
 settings:

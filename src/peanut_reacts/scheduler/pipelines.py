@@ -762,9 +762,20 @@ def run_ambient_pipeline(
         return 0, 1
 
 
+def run_hasan_archive_pipeline(
+    channel: ChannelConfig,
+    settings: GlobalSettings,
+    db: PipelineDB,
+) -> tuple[int, int]:
+    """Run the HasanAbi archive pipeline (download from fan archive → segment → upload)."""
+    from peanut_reacts.scheduler.hasan_pipeline import run_hasan_pipeline
+    return run_hasan_pipeline(channel, settings, db, max_segments=10, extract_shorts=True)
+
+
 PIPELINE_MAP = {
     "playlist": run_reaction_pipeline,
     "twitch_vod": run_twitch_pipeline,
+    "hasan_archive": run_hasan_archive_pipeline,
     "lofi": run_lofi_pipeline,
     "reddit": run_reddit_pipeline,
     "ambient": run_ambient_pipeline,

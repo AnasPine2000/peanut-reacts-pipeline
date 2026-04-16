@@ -14,12 +14,22 @@ PLAN_FILE = Path(__file__).parent / "BUSINESS_PLAN.md"
 SHORTS_FILE = Path(__file__).parent / "SHORTS_TIKTOK_STRATEGY.md"
 SETUP_FILE = Path(__file__).parent / "CHANNEL_SETUP_GUIDE.md"
 LEARNING_FILE = Path(__file__).parent / "learning_uk_clips.json"
+SHORTS_STATS_FILE = Path(__file__).parent / "shorts_stats.json"
 
 
 def load_learning() -> dict:
     if LEARNING_FILE.exists():
         return json.loads(LEARNING_FILE.read_text(encoding="utf-8"))
     return {}
+
+
+def load_shorts_stats() -> dict:
+    if SHORTS_STATS_FILE.exists():
+        try:
+            return json.loads(SHORTS_STATS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"stats": {}, "recent": []}
 
 
 def load_status():
@@ -106,6 +116,23 @@ def render_overview():
 
     if not any(ch.get("youtube", {}).get("exists") for ch in channels):
         md += "\n_No YouTube channels synced yet. Run the status exporter locally to populate live data._\n"
+
+    # Active builds
+    builds = status.get("active_builds", [])
+    if builds:
+        md += "\n---\n\n## Active Builds\n\n"
+        md += "| Build | Step | Last Activity | Age |\n|-------|------|---------------|-----|\n"
+        for b in builds:
+            md += f"| {b.get('name', '?')} | **{b.get('current_step', '?')}** | {b.get('last_activity', '?')[:16]} | {b.get('age_minutes', 0):.0f} min ago |\n"
+
+    # Shorts queue summary
+    shorts = load_shorts_stats()
+    sq = shorts.get("stats", {})
+    if sq.get("total", 0) > 0:
+        md += f"\n---\n\n## Shorts Queue\n\n"
+        md += f"| Ready | Scheduled | Posted | Failed | Total |\n"
+        md += f"|-------|-----------|--------|--------|-------|\n"
+        md += f"| {sq.get('ready', 0)} | {sq.get('scheduled', 0)} | {sq.get('posted', 0)} | {sq.get('failed', 0)} | {sq.get('total', 0)} |\n"
 
     return md
 
@@ -628,6 +655,42 @@ def render_learning_chart():
     return fig
 
 
+# ── SHORTS QUEUE TAB ────────────────────────────────────────────────
+
+def render_shorts_queue() -> str:
+    shorts = load_shorts_stats()
+    sq = shorts.get("stats", {})
+    recent = shorts.get("recent", [])
+
+    md = "## Shorts Posting Queue\n\n"
+    md += "_Clips are extracted from long-form videos and queued for posting at optimal times._\n\n"
+
+    if not sq or sq.get("total", 0) == 0:
+        md += "_No clips in queue yet. Clips are automatically extracted after each video upload._\n"
+        return md
+
+    md += f"| Status | Count |\n|--------|-------|\n"
+    md += f"| Ready (unscheduled) | {sq.get('ready', 0)} |\n"
+    md += f"| Scheduled (waiting) | {sq.get('scheduled', 0)} |\n"
+    md += f"| Posted (all platforms) | {sq.get('posted', 0)} |\n"
+    md += f"| Failed | {sq.get('failed', 0)} |\n"
+    md += f"| **Total** | **{sq.get('total', 0)}** |\n\n"
+
+    md += "### Posting Schedule\n\n"
+    md += "Shorts are posted **5x daily** at: 07:03, 12:03, 18:03, 21:03, 23:03 UTC\n\n"
+
+    if recent:
+        md += "### Recent Clips\n\n"
+        md += "| Channel | Source | Emotion | Score | Status | YT | TT |\n"
+        md += "|---------|--------|---------|-------|--------|----|----|\\n"
+        for c in recent[:15]:
+            yt_link = f"[Watch]({c['youtube_short_url']})" if c.get("youtube_short_url") else "—"
+            tt_link = "Posted" if c.get("posted_tt_at") else "—"
+            md += f"| {c.get('channel_id', '?')} | {(c.get('source_video_title') or '?')[:30]} | {c.get('peak_emotion', '?')} | {c.get('peak_score', 0):.2f} | {c.get('status', '?')} | {yt_link} | {tt_link} |\n"
+
+    return md
+
+
 # ── BUILD THE APP ───────────────────────────────────────────────────
 
 with gr.Blocks(title="Peanut Reacts Pipeline", theme=gr.themes.Soft()) as app:
@@ -684,6 +747,10 @@ with gr.Blocks(title="Peanut Reacts Pipeline", theme=gr.themes.Soft()) as app:
                     gr.Markdown(render_experiments)
                 with gr.Tab("Analysis"):
                     gr.Markdown(render_analysis_details)
+
+        with gr.Tab("Shorts Queue"):
+            shorts_md = gr.Markdown(render_shorts_queue)
+            gr.Button("Refresh", size="sm").click(fn=render_shorts_queue, outputs=shorts_md)
 
         with gr.Tab("Business Plan"):
             gr.Markdown(load_markdown(PLAN_FILE))

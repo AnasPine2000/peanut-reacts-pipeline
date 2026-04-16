@@ -156,6 +156,24 @@ def run_learning_cycle(
         insights = []
         recs = []
 
+    # ── Step 5b: Competitor analysis (feedforward loop) ────────
+    if llm_provider:
+        try:
+            from .competitor_tracker import run_competitor_analysis
+            comp_result = run_competitor_analysis(
+                channel_id=channel_config.id,
+                llm_provider=llm_provider,
+                learning_db_path=learning_db_path,
+            )
+            comp_insights = comp_result.get("insights", [])
+            summary["competitor_insights"] = len(comp_insights)
+            summary["competitors_found"] = comp_result.get("competitors_found", 0)
+            log.info("[%s] Competitor analysis: %d competitors, %d insights",
+                     channel_config.id, summary["competitors_found"], len(comp_insights))
+        except Exception as e:
+            log.warning("Competitor analysis failed: %s", e)
+            summary["competitor_insights"] = 0
+
     # ── Step 6: Comment sentiment (optional, uses API quota) ─────
     if analyze_comments and llm_provider:
         # Top 5 performers get sentiment analysis
