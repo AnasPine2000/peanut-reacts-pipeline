@@ -40,9 +40,39 @@ Thumbs.db
 cookies.txt
 *.cookies.txt
 peanut_progress.json
+tokens/
+secrets/
+*_token.json
+client_secret*.json
+
+# Databases (regenerated on each machine)
+*.db
+
+# Production output (large files)
+production/
+cache/
+logs/
 
 # Test artifacts
 test_run/
 
 # Temp files
 *.tmp
+
+# Youtubers_Aid (separate repo)
+Youtubers_Aid/
+
+# External libraries (nested git repos)
+lib/
+
+# Downloaded content
+data/ai_peanut_clips/*.mp4
+data/clips/
+
+# Dashboard status (generated)
+dashboard/status.json
+dashboard/learning_*.json
+dashboard/experiments.json
+
+# Spreadsheets (deliverables, not code)
+*.xlsx

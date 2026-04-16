@@ -1,0 +1,158 @@
+# ═══════════════════════════════════════════════════════════════
+# Multi-Channel YouTube Pipeline Configuration
+# Each channel has its own character, schedule, and content source
+# ═══════════════════════════════════════════════════════════════
+
+channels:
+  # ── Channel 1: Peanut Reacts (Sidemen Among Us) ──────────────
+  - id: uk_clips
+    name: "UK CLIPS (Peanut Reacts)"
+    character: peanut
+    source_type: playlist
+    source_urls:
+      - "https://www.youtube.com/playlist?list=PLhjLcvbbPVrVOY5w5Pl7KuSe5fGroQJJD"   # SIDEMEN AMONG US (full eps)
+      - "https://www.youtube.com/playlist?list=PLhjLcvbbPVrVH8eMLy1_HhnQ_FeqpDTmT"   # SIDEMEN AMONG US COMPILATIONS
+    tts_voice: "en-GB-RyanNeural"
+    tts_rate: "+15%"
+    llm_personality: >
+      You are Peanut, an excitable animated peanut character watching Sidemen Among Us.
+      You're a massive fan. React with hype, shock, humor, and hot takes.
+      Keep reactions SHORT (1-2 sentences max). Be entertaining and loud.
+    reactions_per_minute: 6
+    gameplay_volume: 0.12
+    reaction_boost: 5.0
+    schedule: "0 9 * * 1,3,5"
+    oauth_token: "~/.peanut_reacts/youtube_token.json"
+    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
+    upload_privacy: public
+    max_videos_per_run: 2
+    video_format: compilation
+    compilation_hours: 5
+    tags: ["sidemen", "among us", "peanut reacts", "reaction", "compilation", "gaming"]
+
+  # ── Channel 2: HasanAbi Archive (Chilli) ─────────────────────
+  - id: hasanabi_archive
+    name: "HasanAbi Archive"
+    character: chilli
+    source_type: twitch_vod
+    source_urls:
+      - "hasanabi"
+    tts_voice: "en-US-GuyNeural"
+    tts_rate: "+5%"
+    llm_personality: >
+      You are Chilli, a hot pepper character with spicy opinions.
+      You react to political commentary and drama with sharp, witty takes.
+      Keep it punchy. Drop hot takes. Be opinionated but fair.
+    schedule: "0 10 * * *"
+    segment_by_topic: true
+    min_segment_minutes: 10
+    max_segment_minutes: 30
+    oauth_token: "~/.peanut_reacts/tokens/hasanabi.json"
+    upload_privacy: public
+    max_segments_per_run: 5
+    tags: ["hasanabi", "hasan", "politics", "twitch", "reaction", "clips"]
+
+  # ── Channel 3: Lofi Vibes (Marshmallow) ──────────────────────
+  - id: lofi_vibes
+    name: "Lofi Vibes"
+    character: marshmallow
+    source_type: lofi
+    schedule: "0 0 * * 1"
+    stream_24_7: true
+    stream_rtmp_url: ""
+    stream_key: ""
+    music_source: "ai_generated"
+    tracks_per_mix: 15
+    mix_duration_minutes: 120
+    oauth_token: "~/.peanut_reacts/tokens/lofi.json"
+    upload_privacy: public
+    tags: ["lofi", "chill", "study", "relax", "beats", "ambient"]
+
+  # ── Channel 6: Cozy Ambient (Marshmallow) ────────────────────
+  # Copyright-free ambient soundscapes for sleep/study/relax
+  # Sources: Pixabay CC0 + Suno commercial + Public Domain Classical
+  - id: cozy_ambient
+    name: "Cozy Ambient Soundscapes"
+    character: marshmallow
+    source_type: ambient
+    schedule: "0 6 * * 0"  # Weekly Sunday 6 AM
+    target_hours: 8
+    themes:
+      - "rainy_cafe"
+      - "fireplace_cabin"
+      - "ocean_night"
+      - "library_lamp"
+      - "tokyo_rain"
+      - "forest_dusk"
+      - "spaceship_drift"
+      - "nordic_cabin"
+      - "campfire_lake"
+      - "balcony_summer"
+    use_ai_visuals: true
+    spotify_distribute: false
+    oauth_token: "~/.peanut_reacts/tokens/cozy_ambient.json"
+    upload_privacy: public
+    tags:
+      - "ambient"
+      - "sleep music"
+      - "study music"
+      - "relaxing"
+      - "cozy"
+      - "8 hours"
+      - "no ads"
+      - "background music"
+
+  # ── Channel 4: Peanut Stories (Cashew) ───────────────────────
+  - id: peanut_stories
+    name: "Peanut Stories"
+    character: cashew
+    source_type: reddit
+    subreddits:
+      - "AmITheAsshole"
+      - "tifu"
+      - "nosleep"
+      - "MaliciousCompliance"
+    tts_voice: "en-US-ChristopherNeural"
+    tts_rate: "+0%"
+    llm_personality: >
+      You are Cashew, a smooth sarcastic narrator. You read Reddit stories
+      with dry humor and clever commentary. Add reactions between story beats.
+      Be witty, sardonic, and entertaining.
+    schedule: "0 8 * * *"
+    min_score: 5000
+    stories_per_video: 3
+    oauth_token: "~/.peanut_reacts/tokens/stories.json"
+    upload_privacy: public
+    tags: ["reddit", "stories", "aita", "tifu", "narration"]
+
+  # ── Channel 5: Peanut Reacts (KSI / Other YouTubers) ────────
+  - id: peanut_ksi
+    name: "Peanut Reacts (KSI)"
+    character: pistachio
+    source_type: playlist
+    source_urls:
+      - "https://www.youtube.com/playlist?list=..."
+    tts_voice: "en-GB-ThomasNeural"
+    tts_rate: "+20%"
+    llm_personality: >
+      You are Pistachio, a cracked and chaotic nut character. You're wild,
+      unhinged, and love KSI. React with maximum energy and absurd humor.
+    reactions_per_minute: 8
+    schedule: "0 14 * * 2,4,6"
+    oauth_token: "~/.peanut_reacts/tokens/ksi.json"
+    upload_privacy: public
+    tags: ["ksi", "reaction", "peanut reacts", "compilation"]
+
+# ── Global Settings ────────────────────────────────────────────
+settings:
+  llm_provider: deepseek
+  llm_model: "deepseek-chat"
+  llm_temperature: 0.85
+  ffmpeg_encoder: "h264_nvenc"
+  ffmpeg_fallback: "libx264"
+  output_dir: "production"
+  db_path: "pipeline.db"
+  log_dir: "logs"
+  discord_webhook_url: ""
+  status_push_interval_minutes: 5
+  hf_space_repo: ""

@@ -1,11 +1,54 @@
+# Peanut Reacts pipeline - full dependency set
+# For cloud deployment, install via: pip install -r requirements.txt
+
+# Core
 yt-dlp>=2024.1.0
 Pillow>=10.0.0
-openai-whisper>=20231117
-sentence-transformers>=2.2.0
 numpy>=1.24.0
-scikit-learn>=1.3.0
-pysrt>=1.1.2
-moviepy>=1.0.3
-pydub>=0.25.1
-edge-tts>=6.1.0
 httpx>=0.25.0
+PyYAML>=6.0
+python-dotenv>=1.0.0
+
+# Audio / Video
+ffmpeg-python>=0.2.0
+pydub>=0.25.1
+moviepy>=1.0.3
+pysrt>=1.1.2
+
+# Transcription (optional, only if no captions available)
+openai-whisper>=20231117
+
+# TTS
+edge-tts>=6.1.0
+
+# YouTube API
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+
+# LLM (DeepSeek uses OpenAI-compatible API)
+openai>=1.30.0
+
+# Scheduler
+APScheduler>=3.10.0
+SQLAlchemy>=2.0.0
+
+# Dashboard
+gradio==5.50.0
+pandas>=2.0.0
+plotly>=5.17.0
+
+# Reddit (Peanut Stories pipeline)
+praw>=7.7.0
+
+# Selenium (TikTok uploader)
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+
+# HuggingFace (status push)
+huggingface_hub>=0.20.0
+
+# Optional: ML embeddings (only used by older Decoded module)
+# sentence-transformers>=2.2.0
+# scikit-learn>=1.3.0

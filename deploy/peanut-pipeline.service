@@ -1,0 +1,42 @@
+# Systemd unit alternative to Docker Compose
+# Use this if you prefer running Python directly on the VPS instead of in containers
+#
+# Install:
+#   sudo cp deploy/peanut-pipeline.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now peanut-pipeline
+#
+# Logs:
+#   sudo journalctl -u peanut-pipeline -f
+
+[Unit]
+Description=Peanut Reacts autonomous YouTube content pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=peanut
+Group=peanut
+WorkingDirectory=/opt/peanut-reacts
+Environment="PYTHONPATH=/opt/peanut-reacts/src"
+EnvironmentFile=/opt/peanut-reacts/.env
+ExecStart=/opt/peanut-reacts/venv/bin/python -m peanut_reacts.scheduler.runner
+Restart=always
+RestartSec=30
+StandardOutput=append:/opt/peanut-reacts/logs/scheduler.log
+StandardError=append:/opt/peanut-reacts/logs/scheduler.error.log
+
+# Resource limits (adjust to VPS specs)
+MemoryMax=6G
+CPUQuota=350%
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/peanut-reacts/data /opt/peanut-reacts/output /opt/peanut-reacts/logs /opt/peanut-reacts/tokens
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
