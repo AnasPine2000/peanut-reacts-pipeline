@@ -162,29 +162,42 @@ def main() -> int:
             audio_path=mp3, duration=dur, word_timings=[],
         )))
 
-    # ── Render idle loop from the SAME realistic peanut ────────────────
-    # Don't fall back to the cartoon renderer — that would swap the character
-    # between reactions, breaking visual continuity. Instead, loop the
-    # realistic peanut PNG with subtle ken-burns on a green screen so the
-    # downstream compositor can chroma-key it identically to the speaking
-    # segments. Result: the same character is visible the entire time.
+    # Define seg_dir early so the idle-loop builder can reference cached segments
+    seg_dir = work_dir / "peanut_segments"
+    seg_dir.mkdir(exist_ok=True)
+
+    # ── Build idle loop from talking-peanut segments (TikTok VTuber style) ─
+    # The peanut is continuously "talking" even between reaction windows —
+    # no audible voice (main video's audio dominates during idle), but the
+    # mouth keeps moving so the character feels alive rather than frozen.
+    # During a real reaction window, the matching SadTalker segment overlays
+    # on top via `enable=between(t,start,end)`, so timing still matches.
+    #
+    # We stitch the first 5 cached SadTalker segments into a ~12s loop —
+    # enough variety that the loop doesn't feel canned.
     idle_path = work_dir / "peanut_idle_loop.mp4"
     if not idle_path.exists():
-        log.info("Rendering realistic-peanut idle loop (4s, static with gentle zoom) ...")
+        seed_segments = [seg_dir / f"peanut_{i:03d}.mp4" for i in range(1, 6)]
+        seed_segments = [s for s in seed_segments if s.exists()]
+        if not seed_segments:
+            log.error("No cached peanut segments to build idle loop from")
+            return 5
+        log.info("Building talking-peanut idle loop from %d seeds ...",
+                 len(seed_segments))
+        concat_list = work_dir / "idle_concat.txt"
+        concat_list.write_text(
+            "\n".join(f"file '{s.resolve().as_posix()}'" for s in seed_segments),
+            encoding="utf-8",
+        )
         subprocess.run([
-            "ffmpeg", "-y",
-            "-loop", "1", "-framerate", "25", "-t", "4",
-            "-i", str(FACE_IMAGE.resolve()),
-            # Scale to 512, pad to square with green bg, slow zoom for liveliness
-            "-vf",
-            "scale=512:512:force_original_aspect_ratio=decrease,"
-            "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00FF00,"
-            "zoompan=z='min(zoom+0.0008,1.08)':x='iw/2-(iw/zoom/2)'"
-            ":y='ih/2-(ih/zoom/2)':d=100:s=512x512:fps=25",
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", str(concat_list.resolve()),
+            "-an",                        # strip audio — idle is silent
             "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
             "-pix_fmt", "yuv420p",
             str(idle_path.resolve()),
-        ], check=True, capture_output=True, timeout=60)
+        ], check=True, capture_output=True, timeout=120)
+        concat_list.unlink(missing_ok=True)
 
     # ── Render SadTalker segments ──────────────────────────────────────
     peanut_segments: list[tuple[ReactionLine, Path]] = []
