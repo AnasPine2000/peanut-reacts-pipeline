@@ -23,12 +23,13 @@ from peanut_reacts.character.sadtalker_sync import (
 
 def test_default_python_respects_env_var(monkeypatch):
     monkeypatch.setenv("SADTALKER_PYTHON", "/custom/path/python")
-    assert str(_default_sadtalker_python()) == "/custom/path/python"
+    # Path normalizes separators per-OS; compare as Path, not string.
+    assert _default_sadtalker_python() == Path("/custom/path/python")
 
 
 def test_default_home_respects_env_var(monkeypatch):
     monkeypatch.setenv("SADTALKER_HOME", "/other/sadtalker")
-    assert str(_default_sadtalker_home()) == "/other/sadtalker"
+    assert _default_sadtalker_home() == Path("/other/sadtalker")
 
 
 def test_sadtalker_available_false_when_python_missing(monkeypatch):

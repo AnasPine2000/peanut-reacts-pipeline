@@ -169,9 +169,17 @@ def test_process_story_longform_keeps_more():
 
 
 def test_process_story_strips_edit_block():
-    s = _make_story(body="**EDIT**: removed info. Main story body. " * 100)
+    # Realistic shape: main body first, then a single EDIT block at the end.
+    # The regex strips the trailing EDIT block — everything before it stays.
+    body = (
+        "Main story body explaining what happened yesterday. " * 20
+        + "\n\nEDIT: removed some info per commenter request.\n"
+    )
+    s = _make_story(body=body)
     out = process_story(s, target_format="shorts")
-    assert "EDIT" not in out.tts_text.upper() or "edit" not in out.tts_text.lower()
+    # The "EDIT:" phrase should be gone from the TTS-ready text
+    assert "EDIT:" not in out.tts_text
+    assert "per commenter request" not in out.tts_text
 
 
 def test_process_story_expands_abbreviations_when_enabled():
