@@ -1,0 +1,44 @@
+version: 2
+updates:
+  # Python deps
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Amsterdam"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "P2"
+    groups:
+      test-deps:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+      google-api:
+        patterns:
+          - "google-*"
+      media:
+        patterns:
+          - "moviepy"
+          - "pydub"
+          - "Pillow"
+    ignore:
+      # Pin torch / whisper / sadtalker deps — manual upgrades only
+      - dependency-name: "torch"
+      - dependency-name: "torchvision"
+      - dependency-name: "torchaudio"
+      - dependency-name: "openai-whisper"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
+      - "P2"

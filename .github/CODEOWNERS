@@ -1,0 +1,22 @@
+# Code ownership — approvers required for changes to listed paths.
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+*                                   @AnasPine2000
+
+# Content pipelines — careful review
+/src/peanut_reacts/scheduler/       @AnasPine2000
+/src/peanut_reacts/compositing/     @AnasPine2000
+/src/peanut_reacts/reddit/          @AnasPine2000
+/src/peanut_reacts/character/       @AnasPine2000
+/src/peanut_reacts/upload/          @AnasPine2000
+
+# Infra + config
+/.github/                           @AnasPine2000
+/deploy/                            @AnasPine2000
+/channels.yaml                      @AnasPine2000
+/pyproject.toml                     @AnasPine2000
+
+# Docs don't require special review
+/*.md
+/docs/

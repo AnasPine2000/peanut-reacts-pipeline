@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Architecture questions
+    url: https://github.com/AnasPine2000/peanut-reacts-pipeline/blob/master/ARCHITECTURE.md
+    about: Start here for how the pipeline pieces fit together.
+  - name: Runbook / how do I...
+    url: https://github.com/AnasPine2000/peanut-reacts-pipeline/blob/master/docs/runbook.md
+    about: On-call runbook for common operational issues.

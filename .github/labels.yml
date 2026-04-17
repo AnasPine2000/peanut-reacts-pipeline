@@ -1,0 +1,72 @@
+# Canonical label set. Sync with: gh label create / update via a bootstrap script.
+# Priorities follow the EXECUTION_PLAN_V2 convention (P0 > P1 > P2).
+
+# ── Priority ─────────────────────────────────────────────────────────
+- name: P0
+  color: "b60205"
+  description: Blocker — stops a phase from progressing
+- name: P1
+  color: "d93f0b"
+  description: Important — should land this phase
+- name: P2
+  color: "fbca04"
+  description: Nice-to-have — backlog until capacity
+
+# ── Type ────────────────────────────────────────────────────────────
+- name: bug
+  color: "ee0701"
+  description: Something isn't working
+- name: enhancement
+  color: "a2eeef"
+  description: New capability or improvement
+- name: task
+  color: "c5def5"
+  description: Scheduled task from EXECUTION_PLAN_V2
+- name: docs
+  color: "0075ca"
+  description: Documentation
+- name: infra
+  color: "5319e7"
+  description: CI / CD / tooling / deploy
+- name: dependencies
+  color: "0366d6"
+  description: Dependency update
+
+# ── Area ────────────────────────────────────────────────────────────
+- name: "area/scheduler"
+  color: "1d76db"
+- name: "area/reddit"
+  color: "1d76db"
+- name: "area/sadtalker"
+  color: "1d76db"
+- name: "area/compositing"
+  color: "1d76db"
+- name: "area/upload"
+  color: "1d76db"
+- name: "area/dashboard"
+  color: "1d76db"
+- name: "area/vps"
+  color: "1d76db"
+
+# ── Category (matches xlsx schedule) ────────────────────────────────
+- name: "cat/content"
+  color: "0e8a16"
+- name: "cat/optimization"
+  color: "fbca04"
+- name: "cat/marketing"
+  color: "d4c5f9"
+- name: "cat/analytics"
+  color: "bfdadc"
+- name: "cat/ops"
+  color: "c2e0c6"
+
+# ── State ───────────────────────────────────────────────────────────
+- name: blocked
+  color: "e99695"
+  description: Blocked on external dependency or decision
+- name: needs-triage
+  color: "ededed"
+- name: good-first-issue
+  color: "7057ff"
+- name: help-wanted
+  color: "008672"
