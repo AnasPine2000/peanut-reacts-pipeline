@@ -1,0 +1,27 @@
+[Unit]
+Description=Peanut Reacts scheduler daemon (all channels, cron-driven)
+Documentation=https://github.com/AnasPine2000/peanut-reacts-pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/peanut-reacts
+Environment="PYTHONPATH=/opt/peanut-reacts/src"
+Environment="PYTHONIOENCODING=utf-8"
+Environment="TZ=UTC"
+EnvironmentFile=/opt/peanut-reacts/.env
+ExecStart=/opt/peanut-reacts/.venv/bin/python -m peanut_reacts.scheduler.runner
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:/opt/peanut-reacts/logs/scheduler.log
+StandardError=append:/opt/peanut-reacts/logs/scheduler.error.log
+
+# Gentle resource caps — VPS has 3.7 GB RAM, 4 vCPU
+MemoryHigh=2.5G
+MemoryMax=3G
+CPUQuota=350%
+
+[Install]
+WantedBy=multi-user.target
