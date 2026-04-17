@@ -211,7 +211,15 @@ def main() -> int:
 
     # ── Final composite ────────────────────────────────────────────────
     log.info("Final composite → %s", out_path)
-    layout = LayoutConfig()  # default layout
+    # Bigger peanut in TOP_RIGHT so lip-sync is clearly visible at a glance
+    from peanut_reacts.compositing.layout import FacecamPosition
+    layout = LayoutConfig(
+        facecam_position=FacecamPosition.TOP_RIGHT,
+        facecam_scale=0.35,                 # 35% of video width (~672px on 1920)
+        facecam_margin=24,
+        facecam_border_width=4,
+        facecam_corner_radius=12,
+    )
     _final_composite(
         clip_path, peanut_segments, reaction_audio, out_path,
         idle_loop_path=idle_path,

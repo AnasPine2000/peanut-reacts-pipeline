@@ -296,25 +296,30 @@ def _final_composite(
         prev_label = "nametag"
 
     # ── Overlay idle peanut (always visible, looping) ───────────────
+    # Use chromakey (YUV-space, tolerant of codec compression) rather than
+    # colorkey (strict RGB match). format=rgba upfront ensures the alpha
+    # channel survives the scale downstream.
     if has_idle:
         video_filters.append(
-            f"[{idle_input_idx}:v]scale={fc_size}:{fc_size},"
-            f"colorkey=0x00FF00:0.3:0.2[idle_ck]",
+            f"[{idle_input_idx}:v]colorkey=0x00FF00:0.5:0.3,"
+            f"format=yuva420p,"
+            f"scale={fc_size}:{fc_size}:flags=lanczos[idle_ck]",
         )
         video_filters.append(
             f"[{prev_label}][idle_ck]overlay=x={fc_x}:y={fc_y}:shortest=1[idle_ov]",
         )
         prev_label = "idle_ov"
 
-    # ── Overlay speaking peanut segments (with colorkey + scale) ──────
+    # ── Overlay speaking peanut segments (with chromakey + scale) ──────
     for i, (line, _) in enumerate(peanut_segments):
         input_idx = i + segment_offset
         out_label = f"v{i}"
         enable = f"between(t,{line.start:.2f},{line.end:.2f})"
 
         video_filters.append(
-            f"[{input_idx}:v]scale={fc_size}:{fc_size},"
-            f"colorkey=0x00FF00:0.3:0.2[ck{i}]",
+            f"[{input_idx}:v]colorkey=0x00FF00:0.5:0.3,"
+            f"format=yuva420p,"
+            f"scale={fc_size}:{fc_size}:flags=lanczos[ck{i}]",
         )
         video_filters.append(
             f"[{prev_label}][ck{i}]overlay=x={fc_x}:y={fc_y}"
