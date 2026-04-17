@@ -654,16 +654,18 @@ def run_reddit_pipeline(
     settings: GlobalSettings,
     db: PipelineDB,
 ) -> tuple[int, int]:
-    """Scrape Reddit stories, narrate with TTS, upload."""
-    try:
-        import praw
-    except ImportError:
-        log.error("praw not installed. Run: pip install praw")
-        return 0, 1
+    """Scrape Reddit stories, narrate with Edge TTS, composite, upload.
 
+    Reads `subreddits`, `min_score`, `stories_per_video`, `character`,
+    `tts_voice`, `tts_rate`, `tags`, `upload_privacy` from the channel
+    config. Delegates the heavy lifting to
+    `peanut_reacts.scheduler.reddit_pipeline.run_reddit_pipeline`.
+    """
     from peanut_reacts.character.reaction_generator import create_llm_provider, LLMConfig
-    from peanut_reacts.character.tts import EdgeTTSEngine, TTSConfig
     from peanut_reacts.core.config import load_config
+    from peanut_reacts.scheduler.reddit_pipeline import (
+        run_reddit_pipeline as run_reddit_engine,
+    )
 
     out_dir = PROJECT_ROOT / settings.output_dir / channel.id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -673,24 +675,66 @@ def run_reddit_pipeline(
         provider=settings.llm_provider,
         api_key=cfg.deepseek_api_key,
         model=settings.llm_model,
-        temperature=0.7,
+        temperature=0.8,
     ))
-    tts = EdgeTTSEngine(TTSConfig(voice=channel.tts_voice, rate=channel.tts_rate))
 
-    videos_done, errors = 0, 0
+    if not channel.subreddits:
+        log.error("[%s] No subreddits configured", channel.id)
+        return 0, 1
 
-    # Note: Reddit API requires client_id/secret in .env
-    # For now, use a simple web scraper fallback
-    log.info("[%s] Reddit pipeline - fetching stories from %s", channel.id, channel.subreddits)
+    log.info("[%s] Reddit pipeline — subs=%s stories=%d min_score=%d",
+             channel.id, channel.subreddits,
+             channel.stories_per_video, channel.min_score)
 
-    # TODO: implement full Reddit scraping + narration + video compilation
-    # This is a placeholder that shows the pipeline structure
     job_id = db.create_job(channel.id, "", f"Reddit Stories {time.strftime('%Y-%m-%d')}")
     db.start_job(job_id, "scrape")
 
-    log.info("[%s] Reddit pipeline not fully implemented yet", channel.id)
-    db.fail_job(job_id, "Reddit pipeline not yet implemented", "scrape")
-    return 0, 1
+    # Resolve YouTube upload service if creds exist
+    upload_service = None
+    if channel.oauth_token and channel.client_secrets:
+        try:
+            from peanut_reacts.upload.youtube_auth import get_authenticated_service
+            token_path = Path(channel.oauth_token).expanduser()
+            secrets_path = Path(channel.client_secrets)
+            if token_path.exists() and secrets_path.exists():
+                upload_service = get_authenticated_service(secrets_path, token_path=token_path)
+            else:
+                log.warning("[%s] OAuth token or secrets missing — will render without uploading",
+                            channel.id)
+        except Exception as e:
+            log.warning("[%s] YouTube auth failed: %s — will render without uploading",
+                        channel.id, e)
+
+    try:
+        result = run_reddit_engine(
+            output_dir=out_dir,
+            llm_provider=llm,
+            subreddits=channel.subreddits,
+            stories_per_video=channel.stories_per_video,
+            min_score=channel.min_score,
+            voice=channel.tts_voice,
+            rate=channel.tts_rate,
+            character=channel.character.title() if channel.character else "Narrator",
+            upload_service=upload_service,
+            upload_privacy=channel.upload_privacy,
+            tags=channel.tags,
+        )
+
+        if result.get("errors"):
+            log.warning("[%s] Reddit pipeline partial errors: %s",
+                        channel.id, result["errors"])
+
+        if result.get("video_path"):
+            db.complete_job(job_id, str(result["video_path"]))
+            return 1, len(result.get("errors", []))
+        else:
+            db.fail_job(job_id, "; ".join(result.get("errors", ["unknown"])), "render")
+            return 0, 1
+
+    except Exception as e:
+        log.exception("[%s] Reddit pipeline crashed", channel.id)
+        db.fail_job(job_id, str(e)[:500], "crash")
+        return 0, 1
 
 
 # ═══════════════════════════════════════════════════════════════

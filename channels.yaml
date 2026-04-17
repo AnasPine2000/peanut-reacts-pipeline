@@ -146,7 +146,38 @@ channels:
     upload_privacy: public
     tags: ["ksi", "reaction", "peanut reacts", "compilation"]
 
-  # ── Channel 7: Peanut TikTok Reacts (clips UK) ───────────────
+  # ── Channel 7: Reddit Stories (Cashew narrates) ──────────────
+  # Cloud-first: runs on the Hetzner VPS, no GPU required.
+  # Narrator + gameplay/gradient background + subtitles + Edge TTS.
+  # Flow: scheduler.pipelines.run_reddit_pipeline -> reddit_pipeline.py
+  - id: reddit_stories
+    name: "Reddit Stories (Cashew)"
+    character: cashew
+    source_type: reddit
+    subreddits:
+      - AmItheAsshole
+      - MaliciousCompliance
+      - pettyrevenge
+      - tifu
+      - ProRevenge
+      - ChoosingBeggars
+      - entitledparents
+    min_score: 2000
+    stories_per_video: 3
+    tts_voice: "en-US-ChristopherNeural"
+    tts_rate: "+5%"
+    llm_personality: >
+      You are Cashew, a sarcastic narrator who reads Reddit stories with dry
+      humor and clever commentary. You paraphrase rather than quote, and
+      drop short witty takes between stories. Keep it punchy and fun.
+    schedule: "0 8 * * *"   # daily at 08:00
+    oauth_token: "~/.peanut_reacts/tokens/reddit_stories.json"
+    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
+    upload_privacy: public
+    max_videos_per_run: 1
+    tags: ["reddit stories", "reddit", "storytime", "narration", "aita", "reddit readings", "askreddit"]
+
+  # ── Channel 8: Peanut TikTok Reacts (clips UK) ───────────────
   # Peanut reacts to viral TikToks — Shorts-first strategy
   - id: peanut_tiktok_reacts
     name: "Peanut TikTok Reacts"
