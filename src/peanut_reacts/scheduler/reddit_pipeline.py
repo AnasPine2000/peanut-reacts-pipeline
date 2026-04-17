@@ -158,8 +158,14 @@ def generate_narration_script(stories: list[dict], llm_provider, character: str 
 
 
 def script_to_tts(script: str, output_dir: Path, voice: str = "en-US-ChristopherNeural",
-                  rate: str = "+0%") -> list[Path]:
-    """Convert narration script to TTS audio files, split by paragraphs."""
+                  rate: str = "+0%") -> list[dict]:
+    """Convert narration script to TTS audio + word timings, split by paragraphs.
+
+    Returns a list of dicts: [{audio_path, duration, words: [(start, end, text), ...]}]
+    where `words` timing is relative to the start of that chunk. Edge TTS gives
+    us word-level offsets for free — we capture them here so the compositor
+    can burn TikTok-style karaoke subtitles.
+    """
     from peanut_reacts.character.tts import EdgeTTSEngine, TTSConfig
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -171,19 +177,33 @@ def script_to_tts(script: str, output_dir: Path, voice: str = "en-US-Christopher
     clean = re.sub(r'\[(shocked|laughing|sarcastic|serious|excited|confused)\]', '', clean)
     paragraphs = [p.strip() for p in clean.split('\n\n') if p.strip() and len(p.strip()) > 20]
 
-    audio_files = []
+    chunks = []
     for i, para in enumerate(paragraphs):
         out = output_dir / f"narration_{i:03d}.mp3"
-        if not out.exists():
-            try:
-                asyncio.run(tts.synthesize(para, out))
-            except Exception as e:
-                log.warning("TTS chunk %d failed: %s", i, e)
-                continue
-        audio_files.append(out)
+        try:
+            if out.exists():
+                # Cached audio — re-synthesize just to recover word timings (fast)
+                out.unlink()
+            result = asyncio.run(tts.synthesize(para, out))
+        except Exception as e:
+            log.warning("TTS chunk %d failed: %s", i, e)
+            continue
 
-    log.info("Generated %d TTS chunks from script", len(audio_files))
-    return audio_files
+        words = [
+            (wt.offset_ms / 1000.0,
+             (wt.offset_ms + wt.duration_ms) / 1000.0,
+             wt.text)
+            for wt in result.word_timings
+        ]
+        chunks.append({
+            "audio_path": out,
+            "duration": result.duration,
+            "words": words,
+        })
+
+    log.info("Generated %d TTS chunks from script (%d total words)",
+             len(chunks), sum(len(c["words"]) for c in chunks))
+    return chunks
 
 
 def concat_audio(audio_files: list[Path], output: Path) -> Optional[Path]:
@@ -208,6 +228,115 @@ def concat_audio(audio_files: list[Path], output: Path) -> Optional[Path]:
     except Exception as e:
         log.error("Audio concat failed: %s", e)
         return None
+
+
+def _format_ass_time(seconds: float) -> str:
+    """ASS time format: H:MM:SS.cs (centiseconds)."""
+    if seconds < 0:
+        seconds = 0
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = seconds % 60
+    return f"{h:d}:{m:02d}:{s:05.2f}"
+
+
+def build_tiktok_ass(
+    chunks: list[dict],
+    output_path: Path,
+    *,
+    words_per_line: int = 3,
+    video_w: int = 1920,
+    video_h: int = 1080,
+    font_name: str = "DejaVu Sans",
+    font_size: int = 96,
+    margin_v: int = 380,
+) -> Path:
+    """Generate an ASS subtitle file with TikTok-style karaoke chunking.
+
+    Consumes the list of TTS chunks produced by `script_to_tts()` and walks
+    through them with a cumulative offset (since each chunk's word timings
+    are 0-based local to that chunk). Groups `words_per_line` consecutive
+    words into one event so the viewer sees a short, punchy line at a time
+    rather than a wall of text.
+
+    Styling: huge bold sans-serif, white fill, black outline, pop-in fade.
+    Matches the dominant TikTok AITA/Reddit reader aesthetic. Edit the
+    style line directly if you want yellow/neon/two-tone instead.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # ASS colors are &HAABBGGRR (alpha inverted: 00 = opaque).
+    primary_color = "&H00FFFFFF"   # white fill
+    outline_color = "&H00000000"   # black outline
+    shadow_color = "&H64000000"    # black with ~39% opacity
+
+    header = f"""[Script Info]
+Title: Reddit Story Subtitles
+ScriptType: v4.00+
+PlayResX: {video_w}
+PlayResY: {video_h}
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: TikTok,{font_name},{font_size},{primary_color},{primary_color},{outline_color},{shadow_color},1,0,0,0,100,100,0,0,1,8,3,2,60,60,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+    events: list[str] = []
+    offset = 0.0   # cumulative seconds into the final concat audio
+
+    # Edge TTS's WordBoundary events are phrase-level for many voices
+    # (e.g. ChristopherNeural). Explode each entry to true word granularity
+    # so the karaoke chunks are readable 3-word flashes, not paragraphs.
+    def _explode_to_words(entries):
+        out = []
+        for start, end, text in entries:
+            words_in_entry = text.split()
+            if not words_in_entry:
+                continue
+            dur = max(end - start, 0.01)
+            per = dur / len(words_in_entry)
+            for i, w in enumerate(words_in_entry):
+                out.append((start + i * per, start + (i + 1) * per, w))
+        return out
+
+    for chunk in chunks:
+        words = _explode_to_words(chunk["words"])
+        if not words:
+            offset += chunk["duration"]
+            continue
+
+        # Group consecutive words into lines of `words_per_line`
+        for i in range(0, len(words), words_per_line):
+            group = words[i:i + words_per_line]
+            start_sec = offset + group[0][0]
+            end_sec = offset + group[-1][1]
+            # Clean and upper-case for TikTok pop aesthetic (optional — comment out for mixed case)
+            line_text = " ".join(w[2] for w in group).strip()
+            # Escape ASS special chars in the visible text
+            line_text = (
+                line_text.replace("\\", "\\\\")
+                .replace("{", "\\{").replace("}", "\\}")
+                .replace(",", "\u002C")   # ASS treats bare commas oddly
+            )
+            # \fad(in_ms, out_ms) = pop-in / fade-out for bounciness
+            text_with_fx = f"{{\\fad(80,60)}}{line_text}"
+            events.append(
+                f"Dialogue: 0,{_format_ass_time(start_sec)},"
+                f"{_format_ass_time(end_sec)},TikTok,,0,0,0,,{text_with_fx}"
+            )
+
+        offset += chunk["duration"]
+
+    output_path.write_text(header + "\n".join(events) + "\n", encoding="utf-8")
+    log.info("ASS subtitles: %s (%d lines, %.1fs total)",
+             output_path.name, len(events), offset)
+    return output_path
 
 
 def get_background_gameplay(duration_seconds: float, output: Path) -> Optional[Path]:
@@ -240,8 +369,15 @@ def composite_reddit_video(
     background: Path,
     output: Path,
     title_text: str = "",
+    subtitles_ass: Optional[Path] = None,
 ) -> Optional[Path]:
-    """Composite final Reddit story video: background + audio + title overlay."""
+    """Composite final Reddit story video: background + audio + title + subs.
+
+    If `subtitles_ass` is provided, the ASS file is burned into the frame via
+    ffmpeg's `subtitles=` filter (libass). The ASS file should be produced by
+    `build_tiktok_ass()` and uses its own styling — the subtitles filter just
+    renders it, no extra style args needed.
+    """
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # Get audio duration
@@ -257,23 +393,35 @@ def composite_reddit_video(
     # Escape title for FFmpeg
     safe_title = title_text.replace("'", "").replace(":", " -")[:60]
 
+    # Build the video filter chain. Order: title drawtext first, subs on top.
+    vf_parts = [
+        f"drawtext=text='{safe_title}':"
+        f"fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=16:"
+        f"x=(w-text_w)/2:y=50:font=Arial:enable='between(t,0,5)'"
+    ]
+    if subtitles_ass and Path(subtitles_ass).exists():
+        # libass needs forward slashes in the path; also escape the colon after
+        # drive letter on Windows (subtitles filter parses ':' as separator).
+        ass_path = str(Path(subtitles_ass).resolve()).replace("\\", "/")
+        if len(ass_path) > 1 and ass_path[1] == ":":
+            ass_path = ass_path[0] + "\\:" + ass_path[2:]
+        vf_parts.append(f"subtitles='{ass_path}'")
+
     try:
         subprocess.run([
             "ffmpeg", "-y",
             "-stream_loop", "-1", "-i", str(background),
             "-i", str(audio),
-            "-vf", (
-                f"drawtext=text='{safe_title}':"
-                f"fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=16:"
-                f"x=(w-text_w)/2:y=50:font=Arial:enable='between(t,0,5)'"
-            ),
+            "-vf", ",".join(vf_parts),
             "-c:v", encoder, "-preset", preset,
             "-c:a", "aac", "-b:a", "192k",
             "-shortest", "-t", str(duration),
             "-movflags", "+faststart",
             str(output),
         ], check=True, capture_output=True, timeout=1800)
-        log.info("Reddit video: %s (%.1f min)", output.name, duration / 60)
+        log.info("Reddit video: %s (%.1f min%s)",
+                 output.name, duration / 60,
+                 ", with TikTok subs" if subtitles_ass else "")
         return output
     except Exception as e:
         log.error("Composite failed: %s", e)
@@ -336,13 +484,14 @@ def run_reddit_pipeline(
     script_path = output_dir / f"script_{timestamp}.txt"
     script_path.write_text(script, encoding="utf-8")
 
-    # Step 3: TTS
+    # Step 3: TTS (captures word timings for TikTok-style subtitles)
     log.info("[Reddit] Running TTS...")
     tts_dir = output_dir / f"tts_{timestamp}"
-    audio_files = script_to_tts(script, tts_dir, voice=voice, rate=rate)
-    if not audio_files:
+    tts_chunks = script_to_tts(script, tts_dir, voice=voice, rate=rate)
+    if not tts_chunks:
         result["errors"].append("TTS failed")
         return result
+    audio_files = [c["audio_path"] for c in tts_chunks]
 
     # Step 4: Concat audio
     full_audio = output_dir / f"audio_{timestamp}.mp3"
@@ -350,6 +499,14 @@ def run_reddit_pipeline(
     if not audio:
         result["errors"].append("Audio concat failed")
         return result
+
+    # Step 4b: Build TikTok-style karaoke ASS from captured word timings
+    subs_ass = output_dir / f"subs_{timestamp}.ass"
+    try:
+        build_tiktok_ass(tts_chunks, subs_ass, words_per_line=3)
+    except Exception as e:
+        log.warning("[Reddit] ASS build failed (continuing without subs): %s", e)
+        subs_ass = None
 
     # Step 5: Background
     r = subprocess.run(
@@ -361,13 +518,15 @@ def run_reddit_pipeline(
     bg = output_dir / "background.mp4"
     background = get_background_gameplay(duration, bg)
 
-    # Step 6: Composite
-    log.info("[Reddit] Compositing video...")
+    # Step 6: Composite with burned-in subs
+    log.info("[Reddit] Compositing video%s...",
+             " with TikTok subs" if subs_ass else "")
     title_parts = [s["title"][:30] for s in selected[:2]]
     video_title = f"{character} Reads: {' | '.join(title_parts)}"
 
     final = output_dir / f"reddit_{timestamp}_final.mp4"
-    video = composite_reddit_video(audio, background, final, video_title)
+    video = composite_reddit_video(audio, background, final, video_title,
+                                   subtitles_ass=subs_ass)
     if not video:
         result["errors"].append("Composite failed")
         return result
