@@ -78,7 +78,7 @@ jobs:
         run: pytest tests/unit -v --cov=peanut_reacts --cov-report=xml --cov-report=term
       - name: Upload coverage (Python 3.11 only)
         if: matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
