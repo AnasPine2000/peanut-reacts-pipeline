@@ -23,7 +23,7 @@ channels:
     reaction_boost: 5.0
     schedule: "0 9 * * 1,3,5"
     oauth_token: "~/.peanut_reacts/youtube_token.json"
-    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
     upload_privacy: public
     max_videos_per_run: 2
     video_format: compilation
@@ -50,7 +50,7 @@ channels:
     min_segment_minutes: 10
     max_segment_minutes: 60
     oauth_token: "~/.peanut_reacts/hasanabi_token.json"
-    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
     upload_privacy: public
     max_segments_per_run: 10
     tags: ["hasanabi", "hasan", "politics", "twitch", "reaction", "clips", "debate"]
@@ -172,7 +172,7 @@ channels:
       drop short witty takes between stories. Keep it punchy and fun.
     schedule: "0 8 * * *"   # daily at 08:00
     oauth_token: "~/.peanut_reacts/tokens/reddit_stories.json"
-    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
     upload_privacy: public
     max_videos_per_run: 1
     tags: ["reddit stories", "reddit", "storytime", "narration", "aita", "reddit readings", "askreddit"]
@@ -191,7 +191,7 @@ channels:
       React with shock, laughter, and pure hype. Keep it short and punchy.
     schedule: "0 11 * * *"
     oauth_token: "~/.peanut_reacts/peanut_tiktok_reacts_token.json"
-    client_secrets: "C:/Users/anasm/Downloads/client_secret_914737972580-9pd0j8k5601tk4p4mmq4e5jvnevonppa.apps.googleusercontent.com.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
     upload_privacy: public
     tags: ["peanut reacts", "tiktok", "viral", "reaction", "funny", "shorts", "trending"]
 
