@@ -162,11 +162,29 @@ def main() -> int:
             audio_path=mp3, duration=dur, word_timings=[],
         )))
 
-    # ── Render idle loop (cartoon fallback, SadTalker doesn't idle) ────
+    # ── Render idle loop from the SAME realistic peanut ────────────────
+    # Don't fall back to the cartoon renderer — that would swap the character
+    # between reactions, breaking visual continuity. Instead, loop the
+    # realistic peanut PNG with subtle ken-burns on a green screen so the
+    # downstream compositor can chroma-key it identically to the speaking
+    # segments. Result: the same character is visible the entire time.
     idle_path = work_dir / "peanut_idle_loop.mp4"
     if not idle_path.exists():
-        log.info("Rendering cartoon idle loop (4s) ...")
-        render_idle_loop(idle_path, 4.0, config=CartoonRendererConfig(canvas_size=512, fps=25))
+        log.info("Rendering realistic-peanut idle loop (4s, static with gentle zoom) ...")
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-loop", "1", "-framerate", "25", "-t", "4",
+            "-i", str(FACE_IMAGE.resolve()),
+            # Scale to 512, pad to square with green bg, slow zoom for liveliness
+            "-vf",
+            "scale=512:512:force_original_aspect_ratio=decrease,"
+            "pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00FF00,"
+            "zoompan=z='min(zoom+0.0008,1.08)':x='iw/2-(iw/zoom/2)'"
+            ":y='ih/2-(ih/zoom/2)':d=100:s=512x512:fps=25",
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+            "-pix_fmt", "yuv420p",
+            str(idle_path.resolve()),
+        ], check=True, capture_output=True, timeout=60)
 
     # ── Render SadTalker segments ──────────────────────────────────────
     peanut_segments: list[tuple[ReactionLine, Path]] = []
