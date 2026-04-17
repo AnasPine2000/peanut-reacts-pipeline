@@ -29,12 +29,70 @@ SUBREDDITS = ["AmItheAsshole", "tifu", "MaliciousCompliance", "ProRevenge", "rel
 
 
 def fetch_top_stories(subreddit: str, min_score: int = 3000, limit: int = 10) -> list[dict]:
-    """Fetch top stories from a subreddit via Reddit JSON API (no auth needed)."""
+    """Fetch top stories from a subreddit.
+
+    Prefers the authenticated OAuth endpoint (via PRAW) when REDDIT_CLIENT_ID
+    and REDDIT_CLIENT_SECRET are set — the public www.reddit.com/*.json path
+    blocks most datacenter/cloud IPs (Hetzner, AWS, GCP) with HTTP 403.
+    Falls back to unauthenticated JSON when running from a residential IP.
+
+    Register an app at https://www.reddit.com/prefs/apps (type: "script") to
+    get a client_id/secret — no user login required for read-only access.
+    """
+    import os
+    client_id = os.environ.get("REDDIT_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "").strip()
+    user_agent = os.environ.get(
+        "REDDIT_USER_AGENT", "peanut-reacts-bot/1.0 by /u/peanut-reacts"
+    )
+
+    if client_id and client_secret:
+        # OAuth path — works from datacenter IPs
+        try:
+            import praw
+            reddit = praw.Reddit(
+                client_id=client_id,
+                client_secret=client_secret,
+                user_agent=user_agent,
+                # Read-only: no username/password needed
+            )
+            reddit.read_only = True
+            posts = []
+            for post in reddit.subreddit(subreddit).top(time_filter="week", limit=limit):
+                if post.score < min_score:
+                    continue
+                if post.stickied or post.over_18:
+                    continue
+                if len(post.selftext or "") < 200:
+                    continue
+                posts.append({
+                    "id": post.id,
+                    "title": post.title,
+                    "text": (post.selftext or "")[:5000],
+                    "score": post.score,
+                    "subreddit": subreddit,
+                    "url": f"https://reddit.com{post.permalink}",
+                    "author": str(post.author) if post.author else "[deleted]",
+                    "num_comments": post.num_comments,
+                })
+            log.info("r/%s: %d stories (score >= %d) via OAuth",
+                     subreddit, len(posts), min_score)
+            return posts
+        except Exception as e:
+            log.error("Reddit OAuth fetch failed for r/%s: %s", subreddit, e)
+            return []
+
+    # Fallback: unauthenticated JSON (works from residential IPs only)
+    log.warning(
+        "REDDIT_CLIENT_ID/SECRET not set — using public JSON endpoint. "
+        "Cloud VPS IPs are often blocked; register an app at "
+        "https://www.reddit.com/prefs/apps for reliable access."
+    )
     import httpx
     try:
         resp = httpx.get(
             f"https://www.reddit.com/r/{subreddit}/top.json?t=week&limit={limit}",
-            headers={"User-Agent": "PeanutReacts/1.0"},
+            headers={"User-Agent": user_agent},
             timeout=30, follow_redirects=True,
         )
         resp.raise_for_status()
@@ -57,7 +115,8 @@ def fetch_top_stories(subreddit: str, min_score: int = 3000, limit: int = 10) ->
                 "author": post.get("author", "[deleted]"),
                 "num_comments": post.get("num_comments", 0),
             })
-        log.info("r/%s: %d stories (score >= %d)", subreddit, len(posts), min_score)
+        log.info("r/%s: %d stories (score >= %d) via public JSON",
+                 subreddit, len(posts), min_score)
         return posts
     except Exception as e:
         log.error("Reddit fetch failed for r/%s: %s", subreddit, e)
