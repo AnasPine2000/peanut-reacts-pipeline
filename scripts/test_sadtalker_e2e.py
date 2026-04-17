@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -88,7 +89,104 @@ def _trim_video(src: Path, dst: Path, duration: float) -> Path:
     return dst
 
 
+def _build_speaker_subtitle_filters(
+    clip_path: Path, work_dir: Path, hf_token: str,
+    video_w: int, video_h: int,
+) -> list[str] | None:
+    """Transcribe + diarize + build ffmpeg drawtext filters for speakers.
+
+    Caches transcript.json + diarization.json in work_dir so subsequent
+    runs skip the slow Whisper (~1min) + pyannote (~3-5min) passes.
+    """
+    from peanut_reacts.analysis.diarization import (
+        DiarizationResult,
+        DiarizedSegment,
+        align_transcript_with_speakers,
+        build_subtitle_filters,
+        diarize_video,
+    )
+    from peanut_reacts.core.transcription import transcribe_video
+
+    transcript_json = work_dir / "transcript.json"
+    diarization_json = work_dir / "diarization.json"
+
+    # ── 1. Whisper transcript ──────────────────────────────────────────
+    if transcript_json.exists():
+        log.info("Using cached transcript: %s", transcript_json.name)
+        transcript = json.loads(transcript_json.read_text(encoding="utf-8"))
+    else:
+        log.info("Transcribing %s with Whisper (base, cuda) ...", clip_path.name)
+        t0 = time.time()
+        transcript = transcribe_video(clip_path, model_name="base", device="cuda")
+        transcript_json.write_text(
+            json.dumps(transcript, indent=2), encoding="utf-8",
+        )
+        log.info("Whisper: %d segments in %.1fs", len(transcript), time.time() - t0)
+
+    # ── 2. Speaker diarization ─────────────────────────────────────────
+    if diarization_json.exists():
+        log.info("Using cached diarization: %s", diarization_json.name)
+        data = json.loads(diarization_json.read_text(encoding="utf-8"))
+        segments = [
+            DiarizedSegment(start=s["start"], end=s["end"], speaker=s["speaker"],
+                           speaker_index=s["speaker_index"])
+            for s in data["segments"]
+        ]
+        diarization = DiarizationResult(
+            segments=segments,
+            num_speakers=data["num_speakers"],
+            speaker_map=data["speaker_map"],
+        )
+    else:
+        log.info("Diarizing %s with pyannote (first run takes 3-5min) ...", clip_path.name)
+        t0 = time.time()
+        try:
+            diarization = diarize_video(clip_path, hf_token=hf_token, work_dir=work_dir)
+        except Exception as e:
+            log.warning("Diarization failed (continuing without): %s", e)
+            return None
+        log.info("Diarization: %d speakers in %.1fs",
+                 diarization.num_speakers, time.time() - t0)
+        # Cache
+        diarization_json.write_text(json.dumps({
+            "num_speakers": diarization.num_speakers,
+            "speaker_map": diarization.speaker_map,
+            "segments": [
+                {"start": s.start, "end": s.end, "speaker": s.speaker,
+                 "speaker_index": s.speaker_index}
+                for s in diarization.segments
+            ],
+        }, indent=2), encoding="utf-8")
+
+    # ── 3. Align transcript with speakers → colored segments ───────────
+    colored = align_transcript_with_speakers(transcript, diarization)
+    log.info("Aligned: %d colored subtitle segments across %d speakers",
+             len(colored), diarization.num_speakers)
+
+    # ── 4. Build ffmpeg drawtext filters ───────────────────────────────
+    filters = build_subtitle_filters(
+        colored,
+        video_width=video_w, video_height=video_h,
+    )
+    log.info("Built %d ffmpeg subtitle filters", len(filters))
+    return filters
+
+
+def _load_dotenv_if_present() -> None:
+    """Load ROOT/.env into os.environ (minimal parser, no external dep)."""
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
 def main() -> int:
+    _load_dotenv_if_present()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--duration", type=float, default=30.0,
                    help="Seconds of source video to use (default: 30)")
@@ -251,11 +349,25 @@ def main() -> int:
         facecam_border_width=4,
         facecam_corner_radius=12,
     )
+
+    # ── Color-coded speaker subtitles for the Sidemen source audio ──────
+    # (Transcribe → diarize → align → build ffmpeg drawtext filters.)
+    # Cached to disk so reruns skip the slow Whisper+pyannote passes.
+    speaker_filters = None
+    hf_token = os.environ.get("HF_TOKEN", "").strip()
+    if hf_token:
+        speaker_filters = _build_speaker_subtitle_filters(
+            clip_path, work_dir, hf_token, video_w, video_h,
+        )
+    else:
+        log.warning("HF_TOKEN not set — skipping diarized subtitles. "
+                    "Add HF_TOKEN to .env for color-coded speakers.")
+
     _final_composite(
         clip_path, peanut_segments, reaction_audio, out_path,
         idle_loop_path=idle_path,
         layout=layout,
-        speaker_subtitle_filters=None,
+        speaker_subtitle_filters=speaker_filters,
         video_width=video_w,
         video_height=video_h,
         original_duck=0.15,
