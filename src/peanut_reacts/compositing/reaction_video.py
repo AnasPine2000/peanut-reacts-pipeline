@@ -67,7 +67,7 @@ class ReactionJob:
     elevenlabs_voice_id: str = "TX3LPaxmHKxFdv7VOQHJ"  # Liam
 
     # Character rendering
-    renderer: str = "cartoon"            # "cartoon" (expression swap), "wav2lip", or "pil"
+    renderer: str = "cartoon"            # "cartoon" | "wav2lip" | "sadtalker" | "burnt_peanut" | "pil"
     use_wav2lip: bool = False            # legacy: same as renderer="wav2lip"
     peanut_face_image: Optional[Path] = None  # neutral face image
     peanut_speaking_image: Optional[Path] = None  # speaking/open-mouth face image
@@ -673,6 +673,35 @@ class ReactionPipeline:
         use_cartoon = (renderer == "cartoon")
         use_burnt = (renderer == "burnt_peanut") and job.peanut_face_image and job.peanut_speaking_image
         use_wav2lip = (renderer == "wav2lip") and job.peanut_face_image and job.peanut_face_image.exists()
+        use_sadtalker = (renderer == "sadtalker") and job.peanut_face_image and job.peanut_face_image.exists()
+
+        # SadTalker always needs the cartoon renderer imported too: it's used
+        # both for the idle loop (SadTalker doesn't idle on silent audio) and
+        # as a per-segment fallback when face-landmark detection fails.
+        _cartoon_fallback_cfg = None
+
+        if use_sadtalker:
+            from peanut_reacts.character.sadtalker_sync import (
+                sadtalker_available, render_sadtalker_reaction, SadTalkerNoFaceError,
+            )
+            if not sadtalker_available():
+                self._log.warning(
+                    "SadTalker not installed — falling back to cartoon renderer. "
+                    "See memory/reference_sadtalker_install.md."
+                )
+                use_sadtalker = False
+                use_cartoon = True
+            else:
+                # Warm up the cartoon fallback config for idle + error cases
+                from peanut_reacts.character.cartoon_renderer import (
+                    CartoonRendererConfig, render_cartoon_segment, render_idle_loop,
+                )
+                _cartoon_fallback_cfg = CartoonRendererConfig(
+                    canvas_size=job.peanut_canvas, fps=job.peanut_fps,
+                )
+                self._log.info(
+                    "Using SadTalker lip-sync renderer (face: %s)", job.peanut_face_image.name,
+                )
 
         if use_burnt:
             from peanut_reacts.character.peanut_animator import render_peanut_idle, render_peanut_speaking
@@ -723,6 +752,12 @@ class ReactionPipeline:
             elif use_cartoon:
                 self._log.info("Rendering cartoon idle loop (4s) ...")
                 render_idle_loop(idle_path, 4.0, config=cartoon_cfg)
+            elif use_sadtalker:
+                # SadTalker-based idle: use cartoon-style motion for idle frames
+                # (SadTalker needs driving audio; silent 4s would still cost a
+                # render with no lip motion, so the cartoon idle is a better fit).
+                self._log.info("Rendering idle loop via cartoon fallback (4s, SadTalker idles silently) ...")
+                render_idle_loop(idle_path, 4.0, config=_cartoon_fallback_cfg)
             elif use_wav2lip:
                 self._log.info("Creating Wav2Lip idle loop (4s) ...")
                 canvas = job.peanut_canvas
@@ -802,6 +837,35 @@ class ReactionPipeline:
                     eye_region=eye_region,
                     source_image_size=source_image_size,
                 )
+            elif use_sadtalker:
+                # SadTalker: audio-driven lip-sync on the realistic peanut.
+                # Falls back to cartoon renderer for this one segment if the
+                # face-landmark detector can't find a face (keeps the pipeline
+                # running instead of aborting the whole video).
+                try:
+                    render_sadtalker_reaction(
+                        job.peanut_face_image,
+                        tts_result.audio_path,
+                        webm_path,
+                        tts_result.duration,
+                        canvas_size=job.peanut_canvas,
+                        green_screen=True,
+                        emotion=line.emotion,
+                        size=256,
+                        tail_padding=0.3,
+                    )
+                except SadTalkerNoFaceError as e:
+                    self._log.warning(
+                        "SadTalker face-detect failed on segment %d — "
+                        "using cartoon fallback. Reason: %s", idx + 1, e,
+                    )
+                    render_cartoon_segment(
+                        line.emotion,
+                        tts_result.duration + 0.3,
+                        webm_path,
+                        config=_cartoon_fallback_cfg,
+                        speaking=True,
+                    )
             else:
                 # PIL renderer: speech-synced cartoon peanut
                 speech_events = word_timings_to_speech_events(
