@@ -94,7 +94,7 @@ foreach ($t in $Tasks) {
 
     $principal = New-ScheduledTaskPrincipal `
         -UserId "$env:USERDOMAIN\$env:USERNAME" `
-        -LogonType InteractiveToken `
+        -LogonType Interactive `
         -RunLevel Limited
 
     Write-Host ("registering {0,-30} channel={1,-20} days={2,-25} local_start={3}" -f `
@@ -106,7 +106,7 @@ foreach ($t in $Tasks) {
         -Trigger $trigger `
         -Settings $settings `
         -Principal $principal `
-        -Description ("Peanut Reacts pipeline — channel {0} (execution_env: local)" -f $t.Channel) `
+        -Description ("Peanut Reacts pipeline - channel {0} (execution_env: local)" -f $t.Channel) `
         -Force | Out-Null
 }
 
