@@ -65,14 +65,8 @@ class VerticalLayoutConfig:
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 def _nvenc_available() -> bool:
-    try:
-        r = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        return "h264_nvenc" in r.stdout
-    except Exception:
-        return False
+    from peanut_reacts.core.ffmpeg import nvenc_available
+    return nvenc_available()
 
 
 def _probe_duration(path: Path) -> float:

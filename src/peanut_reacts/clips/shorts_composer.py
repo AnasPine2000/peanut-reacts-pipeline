@@ -296,9 +296,6 @@ def _get_duration(path: Path) -> float:
 
 
 def _nvenc_available() -> bool:
-    try:
-        r = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
-                          capture_output=True, text=True, timeout=10)
-        return "h264_nvenc" in r.stdout
-    except Exception:
-        return False
+    """Delegate to canonical check that actually tests nvenc at runtime."""
+    from peanut_reacts.core.ffmpeg import nvenc_available
+    return nvenc_available()

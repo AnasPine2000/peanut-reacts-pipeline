@@ -30,14 +30,9 @@ if str(SRC_ROOT) not in sys.path:
 
 
 def _nvenc_available() -> bool:
-    try:
-        r = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"],
-            capture_output=True, text=True, timeout=10,
-        )
-        return "h264_nvenc" in r.stdout
-    except Exception:
-        return False
+    """Deprecated wrapper — delegates to core.ffmpeg.nvenc_available."""
+    from peanut_reacts.core.ffmpeg import nvenc_available
+    return nvenc_available()
 
 
 def _get_encoder(settings: GlobalSettings) -> str:

@@ -18,6 +18,56 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Encoder detection
+# ---------------------------------------------------------------------------
+
+_NVENC_CACHED: Optional[bool] = None
+
+
+def nvenc_available() -> bool:
+    """Return True iff ``h264_nvenc`` can actually encode on this host.
+
+    ffmpeg's ``-encoders`` output says whether nvenc was *compiled in* — it
+    does NOT tell you whether there's a usable GPU. Distro ffmpeg packages
+    routinely ship with nvenc compiled in, so the old compile-only check
+    returned True even on CPU-only cloud VPS instances, causing every
+    render to fail at runtime.
+
+    This does a real 0.1-second null-output encode. First call pays the
+    ~200ms cost; subsequent calls are cached.
+
+    Override via env vars (useful for CI / tests):
+        PEANUT_FORCE_NVENC=1   → always True
+        PEANUT_FORCE_NVENC=0   → always False
+    """
+    global _NVENC_CACHED
+    if _NVENC_CACHED is not None:
+        return _NVENC_CACHED
+
+    env_override = os.environ.get("PEANUT_FORCE_NVENC")
+    if env_override is not None:
+        _NVENC_CACHED = env_override.strip() in ("1", "true", "yes", "TRUE")
+        return _NVENC_CACHED
+
+    try:
+        r = subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-f", "lavfi", "-i", "color=c=black:s=128x128:d=0.1",
+                "-c:v", "h264_nvenc", "-t", "0.1", "-f", "null", "-",
+            ],
+            capture_output=True, text=True, timeout=8,
+        )
+        _NVENC_CACHED = r.returncode == 0
+    except Exception:
+        _NVENC_CACHED = False
+
+    logger.info("NVENC %s (h264_nvenc functional test)",
+                "available" if _NVENC_CACHED else "unavailable — using libx264")
+    return _NVENC_CACHED
+
+
+# ---------------------------------------------------------------------------
 # Queries
 # ---------------------------------------------------------------------------
 

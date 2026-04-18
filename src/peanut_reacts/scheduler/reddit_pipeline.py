@@ -429,11 +429,9 @@ def composite_reddit_video(
 
 
 def _nvenc():
-    try:
-        r = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=10)
-        return "h264_nvenc" in r.stdout
-    except:
-        return False
+    """Delegate to canonical check that actually tests nvenc, not just compile-in."""
+    from peanut_reacts.core.ffmpeg import nvenc_available
+    return nvenc_available()
 
 
 def run_reddit_pipeline(

@@ -101,22 +101,12 @@ _NVENC_AVAILABLE: bool | None = None
 
 
 def _check_nvenc() -> bool:
-    """Check if NVIDIA NVENC encoder is available."""
-    global _NVENC_AVAILABLE
-    if _NVENC_AVAILABLE is not None:
-        return _NVENC_AVAILABLE
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        _NVENC_AVAILABLE = "h264_nvenc" in result.stdout
-        if _NVENC_AVAILABLE:
-            logger.info("GPU encoding enabled (NVIDIA NVENC)")
-        return _NVENC_AVAILABLE
-    except Exception:
-        _NVENC_AVAILABLE = False
-        return False
+    """Check if NVIDIA NVENC is actually usable (compile-in AND GPU present)."""
+    from peanut_reacts.core.ffmpeg import nvenc_available
+    available = nvenc_available()
+    if available:
+        logger.info("GPU encoding enabled (NVIDIA NVENC)")
+    return available
 
 
 # ---------------------------------------------------------------------------

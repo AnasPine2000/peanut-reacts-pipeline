@@ -36,16 +36,10 @@ ENDING_TEXTS = [
 
 
 def _get_encoder() -> list[str]:
-    """Return NVENC encoder args if available, else libx264."""
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"],
-            capture_output=True, text=True,
-        )
-        if "h264_nvenc" in result.stdout:
-            return ["-c:v", "h264_nvenc", "-preset", "fast", "-b:v", "6M"]
-    except Exception:
-        pass
+    """Return NVENC encoder args if a usable GPU is present, else libx264."""
+    from peanut_reacts.core.ffmpeg import nvenc_available
+    if nvenc_available():
+        return ["-c:v", "h264_nvenc", "-preset", "fast", "-b:v", "6M"]
     return ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast"]
 
 
