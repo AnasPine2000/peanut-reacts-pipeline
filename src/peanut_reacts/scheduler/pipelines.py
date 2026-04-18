@@ -117,8 +117,11 @@ def run_reaction_pipeline(
                 srt_path = dl_dir / f"{vid_id}.srt"
 
                 if not video_path.exists():
+                    # stdout=DEVNULL + -q to avoid the classic
+                    # capture_output pipe-buffer deadlock on long downloads.
                     subprocess.run([
                         "yt-dlp",
+                        "-q", "--no-warnings", "--newline",
                         # Prefer mp4-compatible H.264 + AAC streams to avoid merge issues
                         "-f", "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4][height<=1080]/best[height<=1080]",
                         "--merge-output-format", "mp4",
@@ -126,7 +129,7 @@ def run_reaction_pipeline(
                         "--convert-subs", "srt",
                         "-o", str(video_path),
                         f"https://youtube.com/watch?v={vid_id}",
-                    ], check=True, capture_output=True, timeout=900)
+                    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, timeout=7200)
 
                 # Parse transcript
                 db.update_job(job_id, step="transcribe")

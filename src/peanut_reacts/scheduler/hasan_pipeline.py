@@ -84,15 +84,21 @@ def download_archive_video(video_id: str, output_dir: Path) -> dict:
 
     log.info("Downloading %s...", video_id)
     try:
+        # Do NOT use capture_output=True — yt-dlp emits heavy progress output
+        # for multi-hour downloads and fills the 64KB pipe buffer, deadlocking
+        # the parent. Route stdout to DEVNULL and let stderr surface in logs.
+        # -q silences per-frame progress; --no-warnings drops the noise we
+        # don't care about.
         subprocess.run([
             "yt-dlp",
+            "-q", "--no-warnings", "--newline",
             "-f", "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4][height<=1080]/best[height<=1080]",
             "--merge-output-format", "mp4",
             "--write-auto-sub", "--sub-lang", "en",
             "--convert-subs", "srt",
             "-o", str(video_path),
             f"https://youtube.com/watch?v={video_id}",
-        ], check=True, capture_output=True, timeout=7200)
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, timeout=7200)
 
         # Find the SRT (yt-dlp adds .en before .srt)
         srt_candidates = list(output_dir.glob(f"{video_id}*.srt"))
