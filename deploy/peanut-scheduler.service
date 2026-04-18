@@ -11,6 +11,7 @@ WorkingDirectory=/opt/peanut-reacts
 Environment="PYTHONPATH=/opt/peanut-reacts/src"
 Environment="PYTHONIOENCODING=utf-8"
 Environment="TZ=UTC"
+Environment="PEANUT_SCHEDULER_ENV=vps"
 EnvironmentFile=/opt/peanut-reacts/.env
 ExecStart=/opt/peanut-reacts/.venv/bin/python -m peanut_reacts.scheduler.runner
 Restart=on-failure

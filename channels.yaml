@@ -5,9 +5,11 @@
 
 channels:
   # ── Channel 1: Peanut Reacts (Sidemen Among Us) ──────────────
+  # YouTube-scraping — must run on residential IP (PC), not VPS.
   - id: uk_clips
     name: "UK CLIPS (Peanut Reacts)"
     character: peanut
+    execution_env: local
     source_type: playlist
     source_urls:
       - "https://www.youtube.com/playlist?list=PLhjLcvbbPVrVOY5w5Pl7KuSe5fGroQJJD"   # SIDEMEN AMONG US (full eps)
@@ -33,9 +35,11 @@ channels:
   # ── Channel 2: HasanAbi Archive (Chilli) ─────────────────────
   # Source: @HasanAbiArchivefan0 (full-length stream archives)
   # Pipeline: download latest → segment by topic → upload 10-60 min clips → Shorts
+  # YouTube-scraping — must run on residential IP (PC), not VPS.
   - id: hasanabi_archive
     name: "HasanAbi Archive"
     character: chilli
+    execution_env: local
     source_type: hasan_archive
     source_urls:
       - "https://www.youtube.com/@HasanAbiArchivefan0/videos"
@@ -129,9 +133,11 @@ channels:
     tags: ["reddit", "stories", "aita", "tifu", "narration"]
 
   # ── Channel 5: Peanut Reacts (KSI / Other YouTubers) ────────
+  # YouTube-scraping — must run on residential IP (PC), not VPS.
   - id: peanut_ksi
     name: "Peanut Reacts (KSI)"
     character: pistachio
+    execution_env: local
     source_type: playlist
     source_urls:
       - "https://www.youtube.com/playlist?list=..."

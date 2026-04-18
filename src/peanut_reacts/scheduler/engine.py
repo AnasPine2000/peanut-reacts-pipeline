@@ -28,12 +28,28 @@ class PipelineEngine:
         self._webhook = config.settings.discord_webhook_url
 
     def setup(self):
-        """Register all channel jobs with the scheduler."""
+        """Register all channel jobs with the scheduler.
+
+        Channels whose `execution_env` doesn't match this box's
+        PEANUT_SCHEDULER_ENV are registered in the DB but skipped from
+        the live scheduler. That way the same channels.yaml can run on
+        both the VPS ("vps") and the user's residential PC ("local")
+        without double-firing — each side only fires its own.
+        """
+        import os
+        env = os.environ.get("PEANUT_SCHEDULER_ENV", "vps").strip().lower()
+        log.info("Scheduler env: %s — will only fire channels with execution_env=%s", env, env)
+
         for ch in self.config.channels:
             self.db.upsert_channel(ch.id, ch.name)
 
             if not ch.schedule:
                 log.info("Channel [%s] has no schedule, skipping", ch.id)
+                continue
+
+            if ch.execution_env != env:
+                log.info("Channel [%s] execution_env=%s (this box: %s) — skipping",
+                         ch.id, ch.execution_env, env)
                 continue
 
             try:

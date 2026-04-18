@@ -58,6 +58,13 @@ class ChannelConfig:
     use_ai_visuals: bool = True
     spotify_distribute: bool = False
 
+    # Execution environment — "vps" (default) or "local" (residential IP)
+    # YouTube-scraping channels need "local" because YouTube bot-detects
+    # datacenter IPs (Hetzner, AWS, GCP). The scheduler filters channels
+    # by the PEANUT_SCHEDULER_ENV env var so the same channels.yaml can
+    # drive jobs on both machines without double-firing.
+    execution_env: str = "vps"
+
 
 @dataclass
 class GlobalSettings:
