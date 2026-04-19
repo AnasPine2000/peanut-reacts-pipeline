@@ -177,7 +177,9 @@ channels:
       humor and clever commentary. You paraphrase rather than quote, and
       drop short witty takes between stories. Keep it punchy and fun.
     schedule: "0 8 * * *"   # daily at 08:00
-    oauth_token: "~/.peanut_reacts/tokens/reddit_stories.json"
+    # Shared with peanut_tiktok_reacts for now (both post to "Peanut Reacts"
+    # channel, 2 subs). Split onto a dedicated channel once traction builds.
+    oauth_token: "~/.peanut_reacts/peanut_tiktok_reacts_token.json"
     client_secrets: "~/.peanut_reacts/client_secret.json"
     upload_privacy: public
     max_videos_per_run: 1
