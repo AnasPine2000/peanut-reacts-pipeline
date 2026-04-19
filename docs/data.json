@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-19T18:47:34.290511+00:00",
+  "generated_at": "2026-04-19T18:58:58.078156+00:00",
   "stats": {
     "total": 14,
     "done": 5,
@@ -37,7 +37,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LiVxC4r2f6I",
-            "duration": "PT5M17S"
+            "duration": "PT5M17S",
+            "views": 0
           },
           {
             "id": "LPxEsMhnoZs",
@@ -48,7 +49,8 @@
             "like_count": 1,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LPxEsMhnoZs",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "dofXCsrIhck",
@@ -59,7 +61,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=dofXCsrIhck",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "yYtcHnXeMtk",
@@ -70,7 +73,8 @@
             "like_count": 1,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=yYtcHnXeMtk",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "Eb37bW0nL1k",
@@ -81,7 +85,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=Eb37bW0nL1k",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           }
         ],
         "error": null
@@ -147,7 +152,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=lmoP_HLYTmU",
-            "duration": "PT10M1S"
+            "duration": "PT10M1S",
+            "views": 0
           },
           {
             "id": "JCV7k88n1Qw",
@@ -158,7 +164,8 @@
             "like_count": 1,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=JCV7k88n1Qw",
-            "duration": "PT47S"
+            "duration": "PT47S",
+            "views": 7
           },
           {
             "id": "JhDjXDu9u-w",
@@ -169,7 +176,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=JhDjXDu9u-w",
-            "duration": "PT10M1S"
+            "duration": "PT10M1S",
+            "views": 0
           },
           {
             "id": "9I9c7l17lfQ",
@@ -180,7 +188,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=9I9c7l17lfQ",
-            "duration": "PT47S"
+            "duration": "PT47S",
+            "views": 3
           },
           {
             "id": "nhS7wWFHwOA",
@@ -191,7 +200,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=nhS7wWFHwOA",
-            "duration": "PT47S"
+            "duration": "PT47S",
+            "views": 8
           }
         ],
         "error": null
@@ -462,7 +472,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LiVxC4r2f6I",
-            "duration": "PT5M17S"
+            "duration": "PT5M17S",
+            "views": 0
           },
           {
             "id": "LPxEsMhnoZs",
@@ -473,7 +484,8 @@
             "like_count": 1,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LPxEsMhnoZs",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "dofXCsrIhck",
@@ -484,7 +496,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=dofXCsrIhck",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "yYtcHnXeMtk",
@@ -495,7 +508,8 @@
             "like_count": 1,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=yYtcHnXeMtk",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "Eb37bW0nL1k",
@@ -506,7 +520,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=Eb37bW0nL1k",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           }
         ],
         "error": null
@@ -570,7 +585,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LiVxC4r2f6I",
-            "duration": "PT5M17S"
+            "duration": "PT5M17S",
+            "views": 0
           },
           {
             "id": "LPxEsMhnoZs",
@@ -581,7 +597,8 @@
             "like_count": 1,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LPxEsMhnoZs",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "dofXCsrIhck",
@@ -592,7 +609,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=dofXCsrIhck",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "yYtcHnXeMtk",
@@ -603,7 +621,8 @@
             "like_count": 1,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=yYtcHnXeMtk",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           },
           {
             "id": "Eb37bW0nL1k",
@@ -614,7 +633,8 @@
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=Eb37bW0nL1k",
-            "duration": "PT42S"
+            "duration": "PT42S",
+            "views": 1
           }
         ],
         "error": null
@@ -940,5 +960,22 @@
     "total_videos": 73
   },
   "days_active": 4,
-  "current_month": 0
+  "current_month": 0,
+  "projections": {
+    "targets": [
+      0,
+      0,
+      0,
+      100,
+      500,
+      1000,
+      2500,
+      5000,
+      8000,
+      12000,
+      15000,
+      18000,
+      20000
+    ]
+  }
 }

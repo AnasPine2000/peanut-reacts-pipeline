@@ -70,6 +70,11 @@ def _enrich_with_network_totals(status: dict) -> dict:
         ch.setdefault("youtube_url", yt.get("url") or yt.get("handle_url") or "")
         ch.setdefault("tiktok_url", "")
 
+        # HTML reads v.views but stats_fetcher writes view_count.
+        # fmt(undefined).toString() would crash renderChannels().
+        for vid in yt.get("latest_videos", []) or []:
+            vid.setdefault("views", vid.get("view_count", 0))
+
     status["network"] = {
         "total_channels": len(channels),
         "active_channels": active,
@@ -87,6 +92,14 @@ def _enrich_with_network_totals(status: dict) -> dict:
     status["generated_at"] = datetime.now(timezone.utc).isoformat()
     status.setdefault("days_active", 4)   # Day 4 of EXECUTION_PLAN_V2 today
     status.setdefault("current_month", 0)  # Month 0 (pre-launch ramp)
+
+    # HTML's renderProjections/renderAnalytics both dereference
+    # DATA.projections.targets — without it the whole render chain
+    # crashes AFTER channels, hiding the "updated" stamp and charts.
+    # Ramp to $20k/mo target by M12 per EXECUTION_PLAN_V2.
+    status.setdefault("projections", {
+        "targets": [0, 0, 0, 100, 500, 1000, 2500, 5000, 8000, 12000, 15000, 18000, 20000],
+    })
     return status
 
 
