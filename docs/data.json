@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-19T18:36:42.633467",
+  "generated_at": "2026-04-19T18:47:34.290511+00:00",
   "stats": {
     "total": 14,
     "done": 5,
@@ -13,16 +13,7 @@
       "source_type": "playlist",
       "schedule": "0 9 * * 1,3,5",
       "privacy": "public",
-      "character": {
-        "id": "peanut",
-        "name": "Peanut",
-        "emoji": "\ud83e\udd5c",
-        "personality": "Excitable, loyal fan, hype reactions",
-        "voice": "en-GB-RyanNeural",
-        "color": "#D4A574",
-        "origin": "A passionate peanut who loves watching Sidemen content",
-        "catchphrase": "LET'S GOOO!"
-      },
+      "character": "peanut",
       "youtube": {
         "exists": true,
         "title": "Peanut Reacts",
@@ -112,7 +103,19 @@
         "reaction",
         "compilation",
         "gaming"
-      ]
+      ],
+      "character_profile": {
+        "id": "peanut",
+        "name": "Peanut",
+        "emoji": "\ud83e\udd5c",
+        "personality": "Excitable, loyal fan, hype reactions",
+        "voice": "en-GB-RyanNeural",
+        "color": "#D4A574",
+        "origin": "A passionate peanut who loves watching Sidemen content",
+        "catchphrase": "LET'S GOOO!"
+      },
+      "youtube_url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
+      "tiktok_url": ""
     },
     {
       "id": "hasanabi_archive",
@@ -120,16 +123,7 @@
       "source_type": "hasan_archive",
       "schedule": "0 10 * * *",
       "privacy": "public",
-      "character": {
-        "id": "chilli",
-        "name": "Chilli",
-        "emoji": "\ud83c\udf36\ufe0f",
-        "personality": "Hot takes, spicy opinions, argumentative",
-        "voice": "en-US-GuyNeural",
-        "color": "#E74C3C",
-        "origin": "A politically-charged chilli pepper with strong opinions",
-        "catchphrase": "THAT'S a HOT take."
-      },
+      "character": "chilli",
       "youtube": {
         "exists": true,
         "title": "UKCLIPS",
@@ -219,7 +213,19 @@
         "reaction",
         "clips",
         "debate"
-      ]
+      ],
+      "character_profile": {
+        "id": "chilli",
+        "name": "Chilli",
+        "emoji": "\ud83c\udf36\ufe0f",
+        "personality": "Hot takes, spicy opinions, argumentative",
+        "voice": "en-US-GuyNeural",
+        "color": "#E74C3C",
+        "origin": "A politically-charged chilli pepper with strong opinions",
+        "catchphrase": "THAT'S a HOT take."
+      },
+      "youtube_url": "https://www.youtube.com/channel/UCAkPwkYDPPpGjsdqszEjLLQ",
+      "tiktok_url": ""
     },
     {
       "id": "lofi_vibes",
@@ -227,16 +233,7 @@
       "source_type": "lofi",
       "schedule": "0 0 * * 1",
       "privacy": "public",
-      "character": {
-        "id": "marshmallow",
-        "name": "Marshmallow",
-        "emoji": "\u2601\ufe0f",
-        "personality": "Chill, soft-spoken, cozy vibes",
-        "voice": "en-US-JennyNeural",
-        "color": "#F8F0E3",
-        "origin": "A cloud-like marshmallow for chill vibes only",
-        "catchphrase": "Just... vibe with me."
-      },
+      "character": "marshmallow",
       "youtube": {
         "exists": false,
         "title": "Lofi Vibes",
@@ -267,15 +264,8 @@
         "relax",
         "beats",
         "ambient"
-      ]
-    },
-    {
-      "id": "cozy_ambient",
-      "name": "Cozy Ambient Soundscapes",
-      "source_type": "ambient",
-      "schedule": "0 6 * * 0",
-      "privacy": "public",
-      "character": {
+      ],
+      "character_profile": {
         "id": "marshmallow",
         "name": "Marshmallow",
         "emoji": "\u2601\ufe0f",
@@ -285,6 +275,16 @@
         "origin": "A cloud-like marshmallow for chill vibes only",
         "catchphrase": "Just... vibe with me."
       },
+      "youtube_url": "",
+      "tiktok_url": ""
+    },
+    {
+      "id": "cozy_ambient",
+      "name": "Cozy Ambient Soundscapes",
+      "source_type": "ambient",
+      "schedule": "0 6 * * 0",
+      "privacy": "public",
+      "character": "marshmallow",
       "youtube": {
         "exists": false,
         "title": "Cozy Ambient Soundscapes",
@@ -317,7 +317,19 @@
         "8 hours",
         "no ads",
         "background music"
-      ]
+      ],
+      "character_profile": {
+        "id": "marshmallow",
+        "name": "Marshmallow",
+        "emoji": "\u2601\ufe0f",
+        "personality": "Chill, soft-spoken, cozy vibes",
+        "voice": "en-US-JennyNeural",
+        "color": "#F8F0E3",
+        "origin": "A cloud-like marshmallow for chill vibes only",
+        "catchphrase": "Just... vibe with me."
+      },
+      "youtube_url": "",
+      "tiktok_url": ""
     },
     {
       "id": "peanut_stories",
@@ -325,16 +337,7 @@
       "source_type": "reddit",
       "schedule": "0 8 * * *",
       "privacy": "public",
-      "character": {
-        "id": "cashew",
-        "name": "Cashew",
-        "emoji": "\ud83e\udd5c",
-        "personality": "Sarcastic, dry humor, witty narrator",
-        "voice": "en-US-ChristopherNeural",
-        "color": "#DAA520",
-        "origin": "A cashew that's seen too much of Reddit",
-        "catchphrase": "Oh, this should be GOOD."
-      },
+      "character": "cashew",
       "youtube": {
         "exists": false,
         "title": "Peanut Stories",
@@ -364,7 +367,19 @@
         "aita",
         "tifu",
         "narration"
-      ]
+      ],
+      "character_profile": {
+        "id": "cashew",
+        "name": "Cashew",
+        "emoji": "\ud83e\udd5c",
+        "personality": "Sarcastic, dry humor, witty narrator",
+        "voice": "en-US-ChristopherNeural",
+        "color": "#DAA520",
+        "origin": "A cashew that's seen too much of Reddit",
+        "catchphrase": "Oh, this should be GOOD."
+      },
+      "youtube_url": "",
+      "tiktok_url": ""
     },
     {
       "id": "peanut_ksi",
@@ -372,16 +387,7 @@
       "source_type": "playlist",
       "schedule": "0 14 * * 2,4,6",
       "privacy": "public",
-      "character": {
-        "id": "pistachio",
-        "name": "Pistachio",
-        "emoji": "\ud83d\udfe2",
-        "personality": "Cracked, unhinged, chaotic energy",
-        "voice": "en-GB-ThomasNeural",
-        "color": "#93C572",
-        "origin": "A pistachio that's lost it watching KSI videos",
-        "catchphrase": "I'M CRACKED!"
-      },
+      "character": "pistachio",
       "youtube": {
         "exists": false,
         "title": "Peanut Reacts (KSI)",
@@ -412,7 +418,19 @@
         "reaction",
         "peanut reacts",
         "compilation"
-      ]
+      ],
+      "character_profile": {
+        "id": "pistachio",
+        "name": "Pistachio",
+        "emoji": "\ud83d\udfe2",
+        "personality": "Cracked, unhinged, chaotic energy",
+        "voice": "en-GB-ThomasNeural",
+        "color": "#93C572",
+        "origin": "A pistachio that's lost it watching KSI videos",
+        "catchphrase": "I'M CRACKED!"
+      },
+      "youtube_url": "",
+      "tiktok_url": ""
     },
     {
       "id": "reddit_stories",
@@ -420,16 +438,7 @@
       "source_type": "reddit",
       "schedule": "0 8 * * *",
       "privacy": "public",
-      "character": {
-        "id": "cashew",
-        "name": "Cashew",
-        "emoji": "\ud83e\udd5c",
-        "personality": "Sarcastic, dry humor, witty narrator",
-        "voice": "en-US-ChristopherNeural",
-        "color": "#DAA520",
-        "origin": "A cashew that's seen too much of Reddit",
-        "catchphrase": "Oh, this should be GOOD."
-      },
+      "character": "cashew",
       "youtube": {
         "exists": true,
         "title": "Peanut Reacts",
@@ -517,7 +526,19 @@
         "aita",
         "reddit readings",
         "askreddit"
-      ]
+      ],
+      "character_profile": {
+        "id": "cashew",
+        "name": "Cashew",
+        "emoji": "\ud83e\udd5c",
+        "personality": "Sarcastic, dry humor, witty narrator",
+        "voice": "en-US-ChristopherNeural",
+        "color": "#DAA520",
+        "origin": "A cashew that's seen too much of Reddit",
+        "catchphrase": "Oh, this should be GOOD."
+      },
+      "youtube_url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
+      "tiktok_url": ""
     },
     {
       "id": "peanut_tiktok_reacts",
@@ -525,16 +546,7 @@
       "source_type": "playlist",
       "schedule": "0 11 * * *",
       "privacy": "public",
-      "character": {
-        "id": "peanut",
-        "name": "Peanut",
-        "emoji": "\ud83e\udd5c",
-        "personality": "Excitable, loyal fan, hype reactions",
-        "voice": "en-GB-RyanNeural",
-        "color": "#D4A574",
-        "origin": "A passionate peanut who loves watching Sidemen content",
-        "catchphrase": "LET'S GOOO!"
-      },
+      "character": "peanut",
       "youtube": {
         "exists": true,
         "title": "Peanut Reacts",
@@ -622,7 +634,19 @@
         "funny",
         "shorts",
         "trending"
-      ]
+      ],
+      "character_profile": {
+        "id": "peanut",
+        "name": "Peanut",
+        "emoji": "\ud83e\udd5c",
+        "personality": "Excitable, loyal fan, hype reactions",
+        "voice": "en-GB-RyanNeural",
+        "color": "#D4A574",
+        "origin": "A passionate peanut who loves watching Sidemen content",
+        "catchphrase": "LET'S GOOO!"
+      },
+      "youtube_url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
+      "tiktok_url": ""
     }
   ],
   "recent_jobs": [
@@ -906,7 +930,7 @@
   "links": {
     "livestream": "",
     "hf_space": "",
-    "github": ""
+    "github": "https://github.com/AnasPine2000/peanut-reacts-pipeline"
   },
   "network": {
     "total_channels": 8,

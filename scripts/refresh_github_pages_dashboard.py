@@ -34,12 +34,18 @@ from peanut_reacts.scheduler.status_exporter import build_status
 
 
 def _enrich_with_network_totals(status: dict) -> dict:
-    """Roll up per-channel YT stats into `status["network"]` so the Pages
-    dashboard's summary cards have the numbers they expect.
+    """Shape status into what docs/index.html expects and roll up totals.
 
-    Also adds generated_at (ISO), days_active (placeholder), current_month
-    (placeholder based on today) so the dashboard's projections panel
-    renders something coherent.
+    The legacy dashboard HTML (committed Apr 16) reads:
+      - d.network.*              — totals (we compute below)
+      - d.links.{github,livestream,hf_space} — string URLs, not empty
+      - d.channels[].character   — STRING id, used as dict key for emoji/color
+      - d.channels[].youtube_url — top-level string (not nested under .youtube)
+      - d.channels[].tiktok_url  — top-level string
+
+    The new status_exporter emits `character` as a nested object. We flatten
+    it back to the expected shape while preserving the richer data under
+    `character_profile` in case another consumer needs it.
     """
     from datetime import datetime, timezone
 
@@ -56,6 +62,14 @@ def _enrich_with_network_totals(status: dict) -> dict:
         if yt.get("exists") and yt.get("video_count", 0) > 0:
             active += 1
 
+        # Legacy-compat reshaping
+        char = ch.get("character")
+        if isinstance(char, dict):
+            ch["character_profile"] = char
+            ch["character"] = char.get("id", "")
+        ch.setdefault("youtube_url", yt.get("url") or yt.get("handle_url") or "")
+        ch.setdefault("tiktok_url", "")
+
     status["network"] = {
         "total_channels": len(channels),
         "active_channels": active,
@@ -63,7 +77,14 @@ def _enrich_with_network_totals(status: dict) -> dict:
         "total_views": total_views,
         "total_videos": total_videos,
     }
-    status.setdefault("generated_at", datetime.now(timezone.utc).isoformat())
+    # Ensure links has non-empty fields the HTML checks for. Use or-coalesce
+    # so status_exporter's empty-string defaults are replaced with real URLs.
+    links = status.setdefault("links", {})
+    links["github"] = links.get("github") or "https://github.com/AnasPine2000/peanut-reacts-pipeline"
+    links.setdefault("livestream", "")
+    links.setdefault("hf_space", "")
+
+    status["generated_at"] = datetime.now(timezone.utc).isoformat()
     status.setdefault("days_active", 4)   # Day 4 of EXECUTION_PLAN_V2 today
     status.setdefault("current_month", 0)  # Month 0 (pre-launch ramp)
     return status
