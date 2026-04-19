@@ -693,12 +693,17 @@ def run_reddit_pipeline(
         try:
             from peanut_reacts.upload.youtube_auth import get_authenticated_service
             token_path = Path(channel.oauth_token).expanduser()
-            secrets_path = Path(channel.client_secrets)
+            secrets_path = Path(channel.client_secrets).expanduser()
             if token_path.exists() and secrets_path.exists():
                 upload_service = get_authenticated_service(secrets_path, token_path=token_path)
+                log.info("[%s] YouTube auth OK — uploads enabled", channel.id)
             else:
-                log.warning("[%s] OAuth token or secrets missing — will render without uploading",
-                            channel.id)
+                log.warning(
+                    "[%s] OAuth files missing (token=%s exists=%s, secrets=%s exists=%s) — "
+                    "will render without uploading",
+                    channel.id, token_path, token_path.exists(),
+                    secrets_path, secrets_path.exists(),
+                )
         except Exception as e:
             log.warning("[%s] YouTube auth failed: %s — will render without uploading",
                         channel.id, e)
