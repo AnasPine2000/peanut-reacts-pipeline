@@ -92,8 +92,15 @@ def source_funny_clips(output_dir: Path, num_clips: int = 15) -> list[Path]:
         for line in result.stdout.strip().split("\n"):
             parts = line.split("\t")
             if len(parts) >= 2:
-                dur = float(parts[2]) if len(parts) > 2 and parts[2] != "NA" else 0
-                if 180 < dur < 1200:  # 3-20 min compilations
+                try:
+                    dur = float(parts[2]) if len(parts) > 2 and parts[2] not in ("NA", "") else 0
+                except ValueError:
+                    dur = 0
+                # Modern fail-compilation channels run 30-120 min; the old
+                # 3-20 min filter rejected everything in 2026. We want a
+                # long source so our 18 x 25s extracted clips are well-spaced
+                # and don't repeat across the compilation.
+                if 180 < dur < 7200:   # 3 min to 2 hours
                     vids.append({"id": parts[0], "title": parts[1], "duration": dur})
     except Exception as e:
         log.error("Search failed: %s", e)
@@ -581,6 +588,29 @@ def run_tntl_pipeline(
 
     result["video_path"] = str(final)
 
+    # Step 2.5: Generate thumbnail (KSI+ grammar: Peanut face left, blue-rect
+    # clip frame right, yellow-in-quotes caption). Works even without upload.
+    thumbnail_path = None
+    try:
+        from peanut_reacts.character.thumbnail_tntl import (
+            generate_tntl_thumbnail_for_episode,
+        )
+        # Pick a caption from PEANUT_FAIL_LINES (thumbnail always implies the
+        # reactor gets cracked — that's what sells the CTR, per KSI+ pattern).
+        # Strip trailing period for clean quoted display.
+        thumb_caption = random.choice(PEANUT_FAIL_LINES).split(".")[0].strip()
+        thumbnail_path = ep_dir / f"thumb_{timestamp}.jpg"
+        generate_tntl_thumbnail_for_episode(
+            episode_clips=clips,
+            output_path=thumbnail_path,
+            caption=thumb_caption,
+        )
+        if not thumbnail_path.exists():
+            thumbnail_path = None
+    except Exception as e:
+        log.warning("[TNTL] Thumbnail generation failed (uploading without): %s", e)
+        thumbnail_path = None
+
     # Step 3: Upload
     if upload_service:
         try:
@@ -604,16 +634,23 @@ def run_tntl_pipeline(
             meta = UploadMetadata(
                 title=title[:100],
                 description=(
-                    f"{character} attempts the Try Not To Laugh challenge! "
-                    f"Watch as {character} tries to keep a straight face through {len(clips)} "
-                    f"of the funniest clips on the internet.\n\n"
-                    f"Can YOU do better? Comment your score!\n\n"
-                    f"Subscribe for weekly Try Not To Laugh episodes!\n\n"
-                    f"#trynottolaugh #tntl #{character.lower()} #funny #challenge #reaction"
+                    f"{character} attempts Try Not To Laugh. British calm, "
+                    f"{len(clips)} clips, one cracked shell.\n\n"
+                    f"Rules: I laugh, the shell cracks. Starting score 1000, "
+                    f"-200 per laugh, +100 per survive.\n\n"
+                    f"Can YOU do better? Comment your score.\n\n"
+                    f"Subscribe — new TNTL every Tuesday &amp; Friday.\n\n"
+                    f"#trynottolaugh #tntl #{character.lower()} #animatedreaction "
+                    f"#british #memes #funny"
                 ),
-                tags=(tags or []) + ["try not to laugh", "tntl", "funny", "challenge", "reaction", character.lower()],
+                tags=(tags or []) + [
+                    "try not to laugh", "tntl", "funny", "challenge",
+                    "animated reaction", "british", "memes",
+                    character.lower(),
+                ],
                 category_id="24",
                 privacy_status=upload_privacy,
+                thumbnail_path=thumbnail_path,
             )
             up_result = uploader.upload_video(final, meta)
             result["youtube_url"] = up_result.url
