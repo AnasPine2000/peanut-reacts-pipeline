@@ -28,23 +28,75 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SUBREDDITS = ["AmItheAsshole", "tifu", "MaliciousCompliance", "ProRevenge", "relationship_advice"]
 
 
+def _parse_reddit_listing(data: dict, subreddit: str, min_score: int) -> list[dict]:
+    """Shared shape parser for Reddit listing JSON (used by both Scrape.do
+    and the direct-httpx fallback)."""
+    posts = []
+    for child in data.get("data", {}).get("children", []):
+        post = child.get("data", {})
+        if post.get("score", 0) < min_score:
+            continue
+        if post.get("stickied") or post.get("over_18"):
+            continue
+        if len(post.get("selftext", "")) < 200:
+            continue
+        posts.append({
+            "id": post["id"],
+            "title": post["title"],
+            "text": post["selftext"][:5000],
+            "score": post.get("score", 0),
+            "subreddit": subreddit,
+            "url": f"https://reddit.com{post.get('permalink', '')}",
+            "author": post.get("author", "[deleted]"),
+            "num_comments": post.get("num_comments", 0),
+        })
+    return posts
+
+
 def fetch_top_stories(subreddit: str, min_score: int = 3000, limit: int = 10) -> list[dict]:
     """Fetch top stories from a subreddit.
 
-    Prefers the authenticated OAuth endpoint (via PRAW) when REDDIT_CLIENT_ID
-    and REDDIT_CLIENT_SECRET are set — the public www.reddit.com/*.json path
-    blocks most datacenter/cloud IPs (Hetzner, AWS, GCP) with HTTP 403.
-    Falls back to unauthenticated JSON when running from a residential IP.
-
-    Register an app at https://www.reddit.com/prefs/apps (type: "script") to
-    get a client_id/secret — no user login required for read-only access.
+    Resolution order:
+      1. Scrape.do managed proxy (SCRAPEDO_API_TOKEN) — residential IP
+         rotation, works from any origin including blocked datacenter IPs.
+         Preferred when the env var is set.
+      2. PRAW / Reddit OAuth (REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET) —
+         authenticated endpoint, works from datacenter IPs.
+      3. Direct httpx against www.reddit.com/*.json — only usable from
+         residential IPs; Reddit 403s most clouds.
     """
     import os
+    import urllib.parse
+    import httpx
+
+    scrapedo_token = os.environ.get("SCRAPEDO_API_TOKEN", "").strip()
     client_id = os.environ.get("REDDIT_CLIENT_ID", "").strip()
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "").strip()
     user_agent = os.environ.get(
         "REDDIT_USER_AGENT", "peanut-reacts-bot/1.0 by /u/peanut-reacts"
     )
+
+    # ── 1. Scrape.do managed proxy ─────────────────────────────────────
+    if scrapedo_token:
+        target_url = (
+            f"https://www.reddit.com/r/{subreddit}/top.json"
+            f"?t=week&limit={limit}"
+        )
+        proxy_url = (
+            "https://api.scrape.do/?"
+            f"token={scrapedo_token}"
+            f"&url={urllib.parse.quote(target_url, safe='')}"
+        )
+        try:
+            resp = httpx.get(proxy_url, timeout=60, follow_redirects=True)
+            resp.raise_for_status()
+            posts = _parse_reddit_listing(resp.json(), subreddit, min_score)
+            log.info("r/%s: %d stories (score >= %d) via Scrape.do",
+                     subreddit, len(posts), min_score)
+            return posts
+        except Exception as e:
+            log.error("Scrape.do fetch failed for r/%s: %s", subreddit, e)
+            # Fall through to next option
 
     if client_id and client_secret:
         # OAuth path — works from datacenter IPs
