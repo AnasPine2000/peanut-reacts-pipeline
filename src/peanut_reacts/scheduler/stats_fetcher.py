@@ -16,10 +16,19 @@ log = logging.getLogger(__name__)
 
 
 def fetch_channel_stats(channel_id: str, oauth_token_path: Path, client_secrets_path: Path) -> dict:
-    """Fetch full stats for an authenticated YouTube channel."""
+    """Fetch full stats for an authenticated YouTube channel.
+
+    Runs in non-interactive mode — if a channel's OAuth token has expired
+    and can't refresh, we return {} for that channel rather than opening a
+    browser prompt that would hang the stats poller / daemon.
+    """
     try:
         from peanut_reacts.upload.youtube_auth import get_authenticated_service
-        service = get_authenticated_service(client_secrets_path, token_path=oauth_token_path)
+        service = get_authenticated_service(
+            client_secrets_path,
+            token_path=oauth_token_path,
+            interactive=False,
+        )
 
         # Get the authenticated channel
         response = service.channels().list(
@@ -106,10 +115,12 @@ def fetch_all_channels_stats(pipeline_config) -> dict:
             continue
 
         token_path = Path(channel.oauth_token).expanduser()
-        secrets_path = Path(channel.client_secrets)
+        secrets_path = Path(channel.client_secrets).expanduser()
 
         if not token_path.exists() or not secrets_path.exists():
-            log.debug("Skipping %s (missing files)", channel.id)
+            log.debug("Skipping %s (missing files): token=%s(%s) secrets=%s(%s)",
+                      channel.id, token_path, token_path.exists(),
+                      secrets_path, secrets_path.exists())
             continue
 
         log.info("Fetching stats for %s...", channel.id)

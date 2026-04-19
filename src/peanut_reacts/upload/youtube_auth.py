@@ -67,11 +67,16 @@ def get_authenticated_service(
     client_secrets_path: str | Path,
     token_path: Path = TOKEN_PATH,
     scopes: list[str] | None = None,
+    interactive: bool = True,
 ):
     """Return an authenticated YouTube Data API v3 service.
 
-    Loads cached credentials from token_path, refreshes if expired,
-    or runs the OAuth browser flow if no valid token exists.
+    Loads cached credentials from token_path, refreshes if expired, or
+    runs the OAuth browser flow if no valid token exists.
+
+    Set `interactive=False` to raise instead of prompting the user — use
+    this for non-interactive contexts (cron jobs, stats pollers, the VPS
+    daemon) where we'd rather fail fast than hang waiting for a click.
     """
     scopes = scopes or SCOPES
     client_secrets_path = Path(client_secrets_path)
@@ -86,6 +91,12 @@ def get_authenticated_service(
     creds = _load_credentials(token_path, scopes)
 
     if not creds:
+        if not interactive:
+            raise RuntimeError(
+                f"OAuth token at {token_path} is missing or expired; "
+                "re-auth required but interactive=False was set. "
+                "Run the OAuth flow once from a machine with a browser to refresh."
+            )
         logger.info("No valid cached token — starting OAuth flow (browser will open) ...")
         flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets_path), scopes)
         creds = flow.run_local_server(port=0)
