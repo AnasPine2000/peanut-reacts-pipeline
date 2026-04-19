@@ -132,25 +132,43 @@ channels:
     upload_privacy: public
     tags: ["reddit", "stories", "aita", "tifu", "narration"]
 
-  # ── Channel 5: Peanut Reacts (KSI / Other YouTubers) ────────
-  # YouTube-scraping — must run on residential IP (PC), not VPS.
+  # ── Channel 5: Peanut Try Not To Laugh ──────────────────────
+  # Hybrid format: KSI TNTL structure (split-screen, shell-crack scoring,
+  # 15-22 clips x 25s, cold-open hook) + Richard Sales Official voice
+  # (calm British butler gravitas, "NO GAPS"/"BRIM ME BABY"/"me"-suffix).
+  # Rebranded from the old "peanut_ksi" pistachio-chaos concept after
+  # competitive research showed animated chaos = saturated, animated
+  # British gravitas = empty lane. See EXECUTION_PLAN_V2 + research notes.
   - id: peanut_ksi
-    name: "Peanut Reacts (KSI)"
-    character: pistachio
+    name: "Peanut Try Not To Laugh"
+    character: peanut
     execution_env: local
-    source_type: playlist
-    source_urls:
-      - "https://www.youtube.com/playlist?list=..."
-    tts_voice: "en-GB-ThomasNeural"
-    tts_rate: "+20%"
+    source_type: tntl
+    tts_voice: "en-GB-RyanNeural"
+    tts_rate: "+5%"
     llm_personality: >
-      You are Pistachio, a cracked and chaotic nut character. You're wild,
-      unhinged, and love KSI. React with maximum energy and absurd humor.
-    reactions_per_minute: 8
-    schedule: "0 14 * * 2,4,6"
-    oauth_token: "~/.peanut_reacts/tokens/ksi.json"
-    upload_privacy: public
-    tags: ["ksi", "reaction", "peanut reacts", "compilation"]
+      You are Peanut — a cracked-shell British peanut with the soul of a posh
+      Victorian butler who has found his one true passion in life: reacting
+      to things. Your voice is calm, London-accented, theatrically understated.
+      You treat ordinary footage with the gravitas of a royal coronation — that
+      mismatch IS the joke. You do NOT shout, you do NOT spam energy; your
+      weapon is dry, deadpan awe and surgical one-liners. Speak in short bursts
+      (3-8 words), ALL CAPS for emphasis on key beats. End sentences with the
+      British "me" tic ("I do love a good laugh, me"). Signature verdicts:
+      "NO GAPS", "TO THE BRIM", "BRIM ME BABY", "VERY IMPRESSIVE",
+      "I NEED ANSWERS IMMEDIATELY". React mid-clip briefly, then deliver the
+      verdict at the end. Never mean, never sarcastic-cruel; sincerely,
+      hilariously invested in nonsense.
+    reactions_per_minute: 2
+    schedule: "0 14 * * 2,5"
+    # Share token with peanut_tiktok_reacts for v1 testing (same pattern as
+    # reddit_stories shares this token). Split to dedicated channel once
+    # format proves out at ~1K subs. Unlisted privacy for early smoke tests.
+    oauth_token: "~/.peanut_reacts/peanut_tiktok_reacts_token.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
+    upload_privacy: unlisted
+    max_videos_per_run: 1
+    tags: ["try not to laugh", "tntl", "peanut", "animated reaction", "british", "cartoon", "funny", "memes", "challenge"]
 
   # ── Channel 7: Reddit Stories (Cashew narrates) ──────────────
   # Cloud-first: runs on the Hetzner VPS, no GPU required.

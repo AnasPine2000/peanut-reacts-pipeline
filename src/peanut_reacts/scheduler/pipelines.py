@@ -819,6 +819,71 @@ def run_hasan_archive_pipeline(
     return run_hasan_pipeline(channel, settings, db, max_segments=10, extract_shorts=True)
 
 
+def run_tntl_channel_pipeline(
+    channel: ChannelConfig,
+    settings: GlobalSettings,
+    db: PipelineDB,
+) -> tuple[int, int]:
+    """Run the Try Not To Laugh pipeline (hybrid KSI+ format / Richard voice).
+
+    Sources funny clips → builds Peanut-PIP episode with verdict TTS in the
+    last ~2s of each clip → uploads to the channel's YouTube. Returns
+    (uploaded, errors).
+    """
+    from peanut_reacts.scheduler.tntl_pipeline import run_tntl_pipeline
+
+    # Resolve YouTube auth — same pattern as the other pipelines, with
+    # .expanduser() on both paths (class-bug-of-3 we've patched elsewhere).
+    youtube_service = None
+    if channel.client_secrets and channel.oauth_token:
+        try:
+            from peanut_reacts.upload.youtube_auth import get_authenticated_service
+            token_path = Path(channel.oauth_token).expanduser()
+            secrets_path = Path(channel.client_secrets).expanduser()
+            if token_path.exists() and secrets_path.exists():
+                youtube_service = get_authenticated_service(
+                    secrets_path,
+                    token_path=token_path,
+                    interactive=False,
+                )
+                log.info("[%s] YouTube auth OK (TNTL)", channel.id)
+            else:
+                log.warning("[%s] TNTL auth paths missing: token=%s(%s) secrets=%s(%s)",
+                            channel.id, token_path, token_path.exists(),
+                            secrets_path, secrets_path.exists())
+        except Exception as e:
+            log.warning("[%s] YouTube auth failed (TNTL): %s", channel.id, e)
+
+    job_id = db.create_job(channel.id, "", "TNTL episode")
+    db.start_job(job_id, "compile")
+
+    try:
+        result = run_tntl_pipeline(
+            output_dir=PROJECT_ROOT / settings.output_dir / channel.id,
+            num_clips=18,
+            character=(channel.character or "Peanut").capitalize(),
+            voice=channel.tts_voice or "en-GB-RyanNeural",
+            upload_service=youtube_service,
+            upload_privacy=channel.upload_privacy,
+            tags=channel.tags,
+        )
+
+        if result.get("youtube_url"):
+            db.complete_job(job_id, result.get("video_path", ""), result["youtube_url"])
+            return 1, 0
+        elif result.get("video_path"):
+            db.complete_job(job_id, result["video_path"])
+            return 1, 0
+        else:
+            errs = "; ".join(result.get("errors", [])) or "Unknown TNTL failure"
+            db.fail_job(job_id, errs)
+            return 0, 1
+    except Exception as e:
+        log.error("[%s] TNTL pipeline crashed: %s", channel.id, e)
+        db.fail_job(job_id, str(e))
+        return 0, 1
+
+
 PIPELINE_MAP = {
     "playlist": run_reaction_pipeline,
     "twitch_vod": run_twitch_pipeline,
@@ -826,6 +891,7 @@ PIPELINE_MAP = {
     "lofi": run_lofi_pipeline,
     "reddit": run_reddit_pipeline,
     "ambient": run_ambient_pipeline,
+    "tntl": run_tntl_channel_pipeline,
 }
 
 
