@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import signal
 import sys
 import time
@@ -17,6 +18,32 @@ from pathlib import Path
 
 # Ensure src is importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+
+def _load_dotenv() -> None:
+    """Load repo-root .env into os.environ if present.
+
+    Systemd's EnvironmentFile handles this when running as the daemon, but
+    direct invocations (`python -m ... --run-once X`, dev, scripts) don't
+    inherit it. Load it here once at startup so every code path sees the
+    same env vars regardless of how runner.py was launched.
+
+    Idempotent: os.environ.setdefault() means we never clobber values that
+    systemd or the shell already set.
+    """
+    # Find .env at the repo root (2 parents above this file's package dir)
+    env_path = Path(__file__).resolve().parents[3] / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_load_dotenv()
 
 from peanut_reacts.scheduler.channel_config import load_channels
 from peanut_reacts.scheduler.db import PipelineDB
