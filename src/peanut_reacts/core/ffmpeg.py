@@ -50,10 +50,12 @@ def nvenc_available() -> bool:
         return _NVENC_CACHED
 
     try:
+        # 320x240 minimum — NVENC returns "invalid param (8)" for smaller
+        # dimensions on many consumer GPUs (RTX 40-series included).
         r = subprocess.run(
             [
                 "ffmpeg", "-hide_banner", "-loglevel", "error",
-                "-f", "lavfi", "-i", "color=c=black:s=128x128:d=0.1",
+                "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.1",
                 "-c:v", "h264_nvenc", "-t", "0.1", "-f", "null", "-",
             ],
             capture_output=True, text=True, timeout=8,

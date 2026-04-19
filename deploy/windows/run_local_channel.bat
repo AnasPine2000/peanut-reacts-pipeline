@@ -33,7 +33,17 @@ SET LOGFILE=%LOGDIR%\local_%CHANNEL%_%DATESTAMP: =%.log
 cd /D "%REPO%"
 
 echo [%DATE% %TIME%] starting %CHANNEL% >> "%LOGFILE%"
-python -m peanut_reacts.scheduler.runner --run-once %CHANNEL% >> "%LOGFILE%" 2>&1
+
+REM Prevent Windows from sleeping while this task runs. SetThreadExecutionState
+REM keeps the system awake (and display on) while PowerShell is alive. When the
+REM shell exits the request is automatically released. Non-admin, no reboot.
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class Sleep { [DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint f); public const uint ES_CONTINUOUS = 0x80000000; public const uint ES_SYSTEM_REQUIRED = 0x1; public const uint ES_DISPLAY_REQUIRED = 0x2; }'; ^
+   [Sleep]::SetThreadExecutionState([Sleep]::ES_CONTINUOUS -bor [Sleep]::ES_SYSTEM_REQUIRED); ^
+   try { python -m peanut_reacts.scheduler.runner --run-once '%CHANNEL%' } ^
+   finally { [Sleep]::SetThreadExecutionState([Sleep]::ES_CONTINUOUS) }" ^
+  >> "%LOGFILE%" 2>&1
+
 SET RC=%ERRORLEVEL%
 echo [%DATE% %TIME%] finished %CHANNEL% rc=%RC% >> "%LOGFILE%"
 

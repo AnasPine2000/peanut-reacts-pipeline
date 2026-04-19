@@ -420,10 +420,17 @@ def run_hasan_pipeline(
             try:
                 from peanut_reacts.upload.youtube_auth import get_authenticated_service
                 token_path = Path(channel_config.oauth_token).expanduser()
-                if token_path.exists():
+                secrets_path = Path(channel_config.client_secrets).expanduser()
+                if token_path.exists() and secrets_path.exists():
                     youtube_service = get_authenticated_service(
-                        Path(channel_config.client_secrets),
+                        secrets_path,
                         token_path=token_path,
+                    )
+                else:
+                    log.warning(
+                        "[HasanAbi] OAuth files missing: token=%s(%s), secrets=%s(%s)",
+                        token_path, token_path.exists(),
+                        secrets_path, secrets_path.exists(),
                     )
             except Exception as e:
                 log.warning("[HasanAbi] YouTube auth failed: %s", e)
