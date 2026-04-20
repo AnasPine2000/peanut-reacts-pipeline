@@ -47,68 +47,91 @@ FAL_MODEL = "fal-ai/kling-video/v1.6/standard/image-to-video"
 # One recipe per clip we need to produce. source_image is the still PNG
 # from assets/peanut_face/; motion_prompt directs Kling on what to animate.
 # Some emotion targets reuse the same still with different motion prompts.
+# IMPORTANT: all 9 clips use the SAME source image (cartoon_amused.png).
+# Earlier versions sourced from 6 different PNGs, which meant each emotion
+# looked like a different character (different beanie colors, different
+# body scales, different backgrounds). The transitions between clips in
+# the final episode were jarring because the *character itself* was
+# changing between emotions, not just the animation.
+#
+# Now every clip is a Kling animation of the exact same cartoon Peanut
+# base frame. Only the motion prompt varies; Kling morphs the expression
+# and body language while preserving the character's shell, beanie,
+# eyes, proportions, and green background. Result: perfect cross-clip
+# continuity so the idle->reaction switch feels like a single character
+# changing mood, not a character swap.
+_SINGLE_SOURCE_IMAGE = "cartoon_amused.png"
+
 CLIP_RECIPES = {
     "peanut_idle": {
-        "source_image": "cartoon_v1.png",
-        "motion_prompt": "cartoon peanut character idling calmly, breathing gently, "
-                         "slight head sway, relaxed expression, eyes blinking "
-                         "naturally, camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character idling calmly with a relaxed "
+                         "neutral expression, breathing gently, slight head sway, "
+                         "small natural blinks, arms relaxed at sides, camera static, "
+                         "preserve exact character design",
         "duration_s": 5,
     },
     "peanut_laughing": {
-        "source_image": "cartoon_amused.png",
-        "motion_prompt": "cartoon peanut character bursting into laughter, head thrown "
-                         "back then forward, shoulders shaking, mouth wide open, "
-                         "teeth visible, genuine joy, camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character bursting into genuine laughter, "
+                         "head thrown back then forward, shoulders shaking, mouth "
+                         "wide open, teeth and tongue visible, arms clutching belly, "
+                         "pure joy, camera static, preserve exact character design",
         "duration_s": 5,
     },
     "peanut_excited": {
-        "source_image": "cartoon_excited.png",
-        "motion_prompt": "cartoon peanut character celebrating excitedly, little fists "
-                         "pumping up and down, bouncing in place, huge smile, eyes "
-                         "sparkling with joy, camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character celebrating excitedly, both "
+                         "little fists pumping up and down, bouncing in place with "
+                         "energy, huge smile, eyes sparkling, camera static, "
+                         "preserve exact character design",
         "duration_s": 5,
     },
     "peanut_celebrating": {
-        "source_image": "cartoon_excited.png",
-        "motion_prompt": "cartoon peanut character raising both arms triumphantly, "
-                         "spinning once, wide open-mouth smile, victorious pose, "
-                         "camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character raising both arms triumphantly in "
+                         "the air, wide open-mouth smile, victorious cheering pose, "
+                         "slight spin, camera static, preserve exact character design",
         "duration_s": 5,
     },
     "peanut_shocked": {
-        "source_image": "cartoon_shocked.png",
-        "motion_prompt": "cartoon peanut character gasping in shock, subtle head shake, "
-                         "eyes widening further, mouth hanging open, small backward "
-                         "recoil motion, camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character gasping in shock, eyes wide open, "
+                         "mouth hanging open in surprise, small backward recoil, "
+                         "hands flying up near face, camera static, preserve exact "
+                         "character design",
         "duration_s": 5,
     },
     "peanut_scared": {
-        "source_image": "cartoon_shocked.png",
-        "motion_prompt": "cartoon peanut character trembling nervously, slight "
-                         "side-to-side shake, hesitant eye movement, apprehensive "
-                         "expression, camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character trembling nervously, body shaking "
+                         "side to side, hesitant fearful eye movement, hands held "
+                         "close, apprehensive expression, camera static, preserve "
+                         "exact character design",
         "duration_s": 5,
     },
     "peanut_confused": {
-        "source_image": "cartoon_confused.png",
-        "motion_prompt": "cartoon peanut character tilting head in confusion from one "
-                         "side to the other, one eyebrow raised, slow quizzical "
-                         "motion, camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character tilting head in confusion side to "
+                         "side, one eyebrow raised skeptically, hand scratching top "
+                         "of head, slow quizzical motion, camera static, preserve "
+                         "exact character design",
         "duration_s": 5,
     },
     "peanut_facepalm": {
-        "source_image": "cartoon_sarcastic.png",
-        "motion_prompt": "cartoon peanut character slowly shaking head in exasperation, "
-                         "heavy sigh, disappointed expression, looking away then "
-                         "forward, camera static",
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character bringing one hand to forehead in "
+                         "facepalm gesture, shaking head slowly in exasperation, "
+                         "heavy disappointed sigh, looking away, camera static, "
+                         "preserve exact character design",
         "duration_s": 5,
     },
     "peanut_sarcastic": {
-        "source_image": "cartoon_sarcastic.png",
+        "source_image": _SINGLE_SOURCE_IMAGE,
         "motion_prompt": "cartoon peanut character doing a slow sarcastic eye-roll, "
-                         "unimpressed side-eye, flat deadpan expression, minimal "
-                         "motion, camera static",
+                         "arms crossed, unimpressed side-eye, flat deadpan expression, "
+                         "minimal body motion, camera static, preserve exact "
+                         "character design",
         "duration_s": 5,
     },
 }

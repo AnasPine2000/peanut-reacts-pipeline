@@ -176,6 +176,7 @@ def render_dynamic_facecam(
     size: int = 360,
     fps: int = 25,
     chroma_key: bool = False,
+    xfade_duration: float = 0.3,
 ) -> Optional[Path]:
     """Render the facecam track by stitching clips per the timeline.
 
@@ -220,36 +221,104 @@ def render_dynamic_facecam(
     if not segment_files:
         return None
 
-    # Concat all segments via concat demuxer
-    # Use absolute paths in the list file (safer than cwd tricks on Windows)
-    list_file = temp_dir / "concat.txt"
-    list_file.write_text(
-        "\n".join(f"file '{p.resolve().as_posix()}'" for p in segment_files),
-        encoding="utf-8",
-    )
+    # ── Concat strategy ──
+    # With only one segment (or xfade_duration=0), fall back to raw concat
+    # copy — no re-encode needed. For 2+ segments we chain xfade filters so
+    # the emotion-clip switches in the PIP track become smooth crossfades
+    # instead of hard cuts. This matters most at verdict_start where the
+    # timeline switches from idle -> reaction; a hard cut there made the
+    # character "teleport" into a new pose.
+    segment_durations = [seg.duration for seg in timeline[:len(segment_files)]]
 
-    try:
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0",
-            "-i", str(list_file),
-            "-c", "copy",
-            str(output_path),
-        ], check=True, capture_output=True, timeout=600)
-        log.info("Rendered dynamic facecam: %s (%d segments)", output_path.name, len(segment_files))
-
-        # Cleanup
-        for f in segment_files:
-            f.unlink(missing_ok=True)
-        list_file.unlink(missing_ok=True)
+    if len(segment_files) == 1 or xfade_duration <= 0:
+        list_file = temp_dir / "concat.txt"
+        list_file.write_text(
+            "\n".join(f"file '{p.resolve().as_posix()}'" for p in segment_files),
+            encoding="utf-8",
+        )
         try:
-            temp_dir.rmdir()
-        except Exception:
-            pass
-        return output_path
-    except subprocess.CalledProcessError as e:
-        log.error("Facecam concat failed: %s", e.stderr.decode("utf-8", errors="replace")[-300:])
-        return None
+            subprocess.run([
+                "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                "-i", str(list_file), "-c", "copy",
+                str(output_path),
+            ], check=True, capture_output=True, timeout=600)
+            log.info("Rendered dynamic facecam (hard-cut): %s (%d segments)",
+                     output_path.name, len(segment_files))
+        except subprocess.CalledProcessError as e:
+            log.error("Facecam concat failed: %s",
+                      e.stderr.decode("utf-8", errors="replace")[-300:])
+            return None
+    else:
+        # Build xfade filter chain: crossfade between each adjacent pair.
+        # Offset math: each xfade starts xfade_duration seconds before the
+        # end of the accumulated output stream so the next clip fades IN
+        # while the previous fades out. Output total duration shrinks by
+        # (N-1) * xfade_duration compared to raw concat.
+        inputs = []
+        for p in segment_files:
+            inputs.extend(["-i", str(p)])
+
+        filter_parts = []
+        prev_label = "0:v"
+        cum_dur = segment_durations[0]
+        for i in range(1, len(segment_files)):
+            offset = max(0.0, cum_dur - xfade_duration)
+            out_label = f"vx{i}"
+            filter_parts.append(
+                f"[{prev_label}][{i}:v]xfade=transition=fade:"
+                f"duration={xfade_duration}:offset={offset:.3f}[{out_label}]"
+            )
+            prev_label = out_label
+            cum_dur = cum_dur + segment_durations[i] - xfade_duration
+
+        filter_complex = ";".join(filter_parts)
+
+        try:
+            subprocess.run([
+                "ffmpeg", "-y",
+                *inputs,
+                "-filter_complex", filter_complex,
+                "-map", f"[{prev_label}]",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+                "-pix_fmt", "yuv420p",
+                "-r", str(fps),
+                "-an",
+                str(output_path),
+            ], check=True, capture_output=True, timeout=600)
+            log.info("Rendered dynamic facecam (xfade %.2fs): %s (%d segments)",
+                     xfade_duration, output_path.name, len(segment_files))
+        except subprocess.CalledProcessError as e:
+            log.warning("xfade failed (%s), falling back to hard-cut concat",
+                        e.stderr.decode("utf-8", errors="replace")[-200:])
+            # Fallback to the raw concat path so the pipeline doesn't die
+            list_file = temp_dir / "concat.txt"
+            list_file.write_text(
+                "\n".join(f"file '{p.resolve().as_posix()}'" for p in segment_files),
+                encoding="utf-8",
+            )
+            try:
+                subprocess.run([
+                    "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                    "-i", str(list_file), "-c", "copy",
+                    str(output_path),
+                ], check=True, capture_output=True, timeout=600)
+            except subprocess.CalledProcessError as e2:
+                log.error("Fallback concat also failed: %s",
+                          e2.stderr.decode("utf-8", errors="replace")[-300:])
+                return None
+
+    # Cleanup
+    for f in segment_files:
+        f.unlink(missing_ok=True)
+    try:
+        (temp_dir / "concat.txt").unlink(missing_ok=True)
+    except Exception:
+        pass
+    try:
+        temp_dir.rmdir()
+    except Exception:
+        pass
+    return output_path
 
 
 def composite_with_facecam(
