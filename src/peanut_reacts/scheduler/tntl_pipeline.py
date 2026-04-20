@@ -246,8 +246,15 @@ def _render_clip_with_peanut(
         # visible at any moment.
         big_size = int(facecam_size * 1.4)   # 360 -> 504
         big_margin = max(20, margin - 10)    # slightly tighter margin when big
+        # Chromakey target: AI Kling clips use a teal-jade gradient
+        # background (#005f37 -> #00cc8a, centered around #008c52), NOT
+        # the pure 0x00FF00 that flat_peanut used. High similarity (0.35)
+        # + generous blend (0.22) covers the full gradient range without
+        # eating the peanut's tan/brown body (which is far from teal in
+        # YUV space). The beanie's green stripe IS affected but only at
+        # its edge, barely noticeable.
         filter_complex = (
-            f"[1:v]chromakey=0x00FF00:0.15:0.08,split=2[fcA][fcB];"
+            f"[1:v]chromakey=0x008C52:0.20:0.12,split=2[fcA][fcB];"
             f"[fcA]scale={facecam_size}:{facecam_size}[fc_small];"
             f"[fcB]scale={big_size}:{big_size}[fc_big];"
             f"[0:v][fc_small]overlay=W-w-{margin}:H-h-{margin}:"
@@ -263,9 +270,10 @@ def _render_clip_with_peanut(
         inputs = ["-i", str(clip_path), "-i", str(facecam_path), "-i", str(verdict_tts)]
         maps = ["-map", "[video_out]", "-map", "[audio_out]"]
     else:
-        # No verdict (cold-open / hook clip) — just PIP overlay + source audio
+        # No verdict (cold-open / hook clip) — just PIP overlay + source audio.
+        # Same AI-clip chromakey params as the verdict-case above.
         filter_complex = (
-            f"[1:v]chromakey=0x00FF00:0.15:0.08,"
+            f"[1:v]chromakey=0x008C52:0.20:0.12,"
             f"scale={facecam_size}:{facecam_size}[fc];"
             f"[0:v][fc]overlay=W-w-{margin}:H-h-{margin},"
             f"drawtext=text='{score_safe}':fontcolor=yellow:fontsize=36:"
