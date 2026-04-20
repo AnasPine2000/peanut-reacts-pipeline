@@ -37,11 +37,13 @@ log = logging.getLogger(__name__)
 # ── Vision: Groq Llama 3.2 Vision ──────────────────────────────────────────
 
 GROQ_VISION_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"   # 2026 current
-# Fallback chain: if Scout is unavailable, try Llama 3.2 Vision preview.
+# 2026 current Groq vision models. Maverick is Scout's larger sibling —
+# slightly slower but higher quality and often available when Scout is
+# rate-limited. The old llama-3.2-vision-preview models are deprecated
+# (they return 400 Bad Request as of early 2026).
+GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_VISION_FALLBACKS = [
-    "llama-3.2-90b-vision-preview",
-    "llama-3.2-11b-vision-preview",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
 ]
 
 
@@ -116,33 +118,54 @@ def describe_clip(clip_path: Path, num_frames: int = 3) -> str:
             "image_url": {"url": b64},
         })
 
+    import time as _time
+
     models_to_try = [GROQ_VISION_MODEL] + GROQ_VISION_FALLBACKS
     for model in models_to_try:
-        try:
-            resp = httpx.post(
-                GROQ_VISION_URL,
-                headers={"Authorization": f"Bearer {api_key}",
-                         "Content-Type": "application/json"},
-                json={
-                    "model": model,
-                    "messages": [{"role": "user", "content": content}],
-                    "temperature": 0.3,
-                    "max_tokens": 120,
-                },
-                timeout=60,
-            )
-            if resp.status_code == 404 or "model_not_found" in resp.text.lower():
-                log.debug("Groq model %s not available, trying next", model)
-                continue
-            resp.raise_for_status()
-            desc = resp.json()["choices"][0]["message"]["content"].strip()
-            # Strip surrounding quotes if any
-            desc = desc.strip('"\'')
-            log.info("[CTX] Clip described (%s): %s", model, desc[:100])
-            return desc
-        except Exception as e:
-            log.warning("Groq vision %s failed: %s", model, str(e)[:200])
-            continue
+        # Up to 3 attempts per model with exponential backoff on 429.
+        # Groq free tier RPM limits hit fast when generating ~18 clips in a
+        # loop — the backoff turns "18 calls in 30 seconds = one rate limit"
+        # into "18 calls paced over 60 seconds = zero rate limits".
+        for attempt in range(3):
+            try:
+                resp = httpx.post(
+                    GROQ_VISION_URL,
+                    headers={"Authorization": f"Bearer {api_key}",
+                             "Content-Type": "application/json"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": content}],
+                        "temperature": 0.3,
+                        "max_tokens": 120,
+                    },
+                    timeout=60,
+                )
+                if resp.status_code == 429:
+                    # Rate-limited — back off and retry the same model
+                    wait = 2 ** attempt * 3  # 3s, 6s, 12s
+                    log.info("Groq 429 on %s, retry in %ds (attempt %d/3)",
+                             model, wait, attempt + 1)
+                    _time.sleep(wait)
+                    continue
+                if resp.status_code in (400, 404) or "model_not_found" in resp.text.lower():
+                    # Model-level failure (deprecated/unknown) — try the next
+                    # model, not the same one again
+                    log.debug("Groq %s returned %d, trying next model",
+                              model, resp.status_code)
+                    break
+                resp.raise_for_status()
+                desc = resp.json()["choices"][0]["message"]["content"].strip()
+                desc = desc.strip('"\'')
+                log.info("[CTX] Clip described (%s): %s", model, desc[:100])
+                return desc
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and attempt < 2:
+                    continue  # backoff already handled above
+                log.warning("Groq vision %s failed: %s", model, str(e)[:200])
+                break
+            except Exception as e:
+                log.warning("Groq vision %s failed: %s", model, str(e)[:200])
+                break
 
     return "A funny clip (vision API unreachable)"
 
