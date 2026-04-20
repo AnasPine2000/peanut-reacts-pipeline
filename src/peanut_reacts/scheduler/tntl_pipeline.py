@@ -219,41 +219,54 @@ def source_playlist_clips(
         log.error("[TNTL] No playlist URLs provided")
         return []
 
-    playlist_url = random.choice(playlist_urls)
-    log.info("[TNTL] Sourcing from playlist: %s", playlist_url[:80])
     cookie_args = _ytdlp_cookie_args()
     if not cookie_args:
         log.warning("[TNTL] No cookies file found — YouTube downloads may "
                     "hit bot-check. Export cookies.txt to "
                     "~/.peanut_reacts/youtube_cookies.txt")
 
-    # List playlist videos
-    try:
-        result = subprocess.run(
-            ["yt-dlp", *cookie_args, "--flat-playlist", "--print",
-             "%(id)s\t%(title)s\t%(duration)s", playlist_url],
-            capture_output=True, text=True, timeout=90,
-        )
-    except Exception as e:
-        log.error("[TNTL] Playlist list failed: %s", e)
-        return []
+    # Pool videos from ALL playlists into one candidate set. Earlier
+    # version picked ONE playlist at random; when that playlist happened
+    # to be a mega-compilation list (all videos >90min filter cap), we
+    # got 0 viable candidates and the pipeline died. Now we combine
+    # everything and filter globally.
+    vids: list[dict] = []
+    for playlist_url in playlist_urls:
+        log.info("[TNTL] Listing playlist: %s", playlist_url[:80])
+        try:
+            result = subprocess.run(
+                ["yt-dlp", *cookie_args, "--flat-playlist", "--print",
+                 "%(id)s\t%(title)s\t%(duration)s", playlist_url],
+                capture_output=True, text=True, timeout=90,
+            )
+        except Exception as e:
+            log.warning("[TNTL] Playlist list failed for %s: %s",
+                        playlist_url[:50], e)
+            continue
 
-    vids = []
-    for line in result.stdout.strip().split("\n"):
-        parts = line.split("\t")
-        if len(parts) >= 2:
-            try:
-                dur = float(parts[2]) if len(parts) > 2 and parts[2] not in ("NA", "") else 0
-            except ValueError:
-                dur = 0
-            # Bound: 10-90 min videos. Short-form shorts have no reaction
-            # material; mega-compilations would waste the 18-clip budget.
-            if 600 < dur < 5400:
-                vids.append({"id": parts[0], "title": parts[1], "duration": dur})
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                try:
+                    dur = float(parts[2]) if len(parts) > 2 and parts[2] not in ("NA", "") else 0
+                except ValueError:
+                    dur = 0
+                # Bound: 10-90 min videos. Short-form shorts have no
+                # reaction material; mega-compilations (3+ hours) waste
+                # download bandwidth and still only give us 18 clips.
+                if 600 < dur < 5400:
+                    vids.append({
+                        "id": parts[0], "title": parts[1],
+                        "duration": dur, "playlist": playlist_url,
+                    })
 
     if not vids:
-        log.error("[TNTL] No viable videos in playlist %s", playlist_url[:80])
+        log.error("[TNTL] No viable videos found across %d playlist(s) "
+                  "(filter: 10-90 min)", len(playlist_urls))
         return []
+
+    log.info("[TNTL] Pooled %d viable videos across %d playlist(s)",
+             len(vids), len(playlist_urls))
 
     # Pick a random video from the playlist so we don't keep picking the
     # top one across runs (would blow YouTube copyright alarms AND make
