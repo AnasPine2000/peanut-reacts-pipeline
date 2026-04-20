@@ -74,6 +74,32 @@ PEANUT_STRUGGLE_LINES = [
 ]
 
 
+def _ytdlp_cookie_args() -> list[str]:
+    """Return yt-dlp --cookies args if a cookies.txt is present, else [].
+
+    YouTube's 2026 anti-bot check requires authenticated cookies for many
+    downloads. We look for a cookies.txt at:
+      - $YTDLP_COOKIES_FILE env var
+      - ~/.peanut_reacts/youtube_cookies.txt  (recommended location)
+
+    The file is exported by the user via a browser extension such as
+    "Get cookies.txt LOCALLY" (Chrome/Edge) while logged into YouTube.
+
+    If no cookies file exists, yt-dlp still tries (will fail cleanly on
+    bot-checked videos) — so unauthenticated sources still work when
+    YouTube isn't actively challenging the IP.
+    """
+    import os as _os
+    candidates = [
+        _os.environ.get("YTDLP_COOKIES_FILE", ""),
+        str(Path.home() / ".peanut_reacts" / "youtube_cookies.txt"),
+    ]
+    for path in candidates:
+        if path and Path(path).exists():
+            return ["--cookies", path]
+    return []
+
+
 def source_funny_clips(output_dir: Path, num_clips: int = 15) -> list[Path]:
     """Download funny compilation videos and extract individual clips."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -81,10 +107,11 @@ def source_funny_clips(output_dir: Path, num_clips: int = 15) -> list[Path]:
     # Download 2-3 compilations
     query = random.choice(FUNNY_QUERIES)
     log.info("[TNTL] Searching: %s", query)
+    cookie_args = _ytdlp_cookie_args()
 
     try:
         result = subprocess.run(
-            ["yt-dlp", f"ytsearch3:{query}",
+            ["yt-dlp", *cookie_args, f"ytsearch3:{query}",
              "--flat-playlist", "--print", "%(id)s\t%(title)s\t%(duration)s"],
             capture_output=True, text=True, timeout=60,
         )
@@ -115,12 +142,16 @@ def source_funny_clips(output_dir: Path, num_clips: int = 15) -> list[Path]:
     if not dl_path.exists():
         log.info("[TNTL] Downloading: %s", vid["title"][:60])
         subprocess.run([
-            "yt-dlp", "-f", "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/best[height<=1080]",
+            "yt-dlp", *cookie_args,
+            "-f", "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/best[height<=1080]",
             "--merge-output-format", "mp4", "-o", str(dl_path),
             f"https://youtube.com/watch?v={vid['id']}",
         ], capture_output=True, timeout=600)
 
     if not dl_path.exists():
+        log.error("[TNTL] Download produced no file (likely YT bot-check). "
+                  "Export cookies.txt to ~/.peanut_reacts/youtube_cookies.txt "
+                  "via 'Get cookies.txt LOCALLY' browser extension.")
         return []
 
     # Get duration and extract clips at regular intervals
@@ -154,6 +185,129 @@ def source_funny_clips(output_dir: Path, num_clips: int = 15) -> list[Path]:
             clips.append(clip_path)
 
     log.info("[TNTL] Extracted %d clips from %s", len(clips), vid["title"][:40])
+    return clips
+
+
+def source_playlist_clips(
+    playlist_urls: list[str],
+    output_dir: Path,
+    num_clips: int = 18,
+    clip_dur: int = 25,
+) -> list[Path]:
+    """Extract N short clips from a random video in one of the given playlists.
+
+    Used for the Peanut-reacts-to-Sidemen flow (and any other channel whose
+    source is a curated playlist of long-form content, e.g. Among Us full
+    episodes). Same output shape as source_funny_clips, just a different
+    source strategy.
+
+    Strategy:
+      1. Pick a random playlist URL from the list
+      2. yt-dlp flat-list the playlist, pick a random video (bounded
+         duration: 10-90 min — skip shorts, skip mega-compilations)
+      3. Download at 1080p
+      4. Extract N evenly-spaced clip_dur-second clips, skipping the first
+         and last 60s (intros / outros / end-screens are not reaction gold)
+
+    Does NOT care which specific moments are funny — the downstream vision
+    pipeline analyzes each extracted clip and writes a verdict targeted at
+    whatever happened in that window.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not playlist_urls:
+        log.error("[TNTL] No playlist URLs provided")
+        return []
+
+    playlist_url = random.choice(playlist_urls)
+    log.info("[TNTL] Sourcing from playlist: %s", playlist_url[:80])
+    cookie_args = _ytdlp_cookie_args()
+    if not cookie_args:
+        log.warning("[TNTL] No cookies file found — YouTube downloads may "
+                    "hit bot-check. Export cookies.txt to "
+                    "~/.peanut_reacts/youtube_cookies.txt")
+
+    # List playlist videos
+    try:
+        result = subprocess.run(
+            ["yt-dlp", *cookie_args, "--flat-playlist", "--print",
+             "%(id)s\t%(title)s\t%(duration)s", playlist_url],
+            capture_output=True, text=True, timeout=90,
+        )
+    except Exception as e:
+        log.error("[TNTL] Playlist list failed: %s", e)
+        return []
+
+    vids = []
+    for line in result.stdout.strip().split("\n"):
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            try:
+                dur = float(parts[2]) if len(parts) > 2 and parts[2] not in ("NA", "") else 0
+            except ValueError:
+                dur = 0
+            # Bound: 10-90 min videos. Short-form shorts have no reaction
+            # material; mega-compilations would waste the 18-clip budget.
+            if 600 < dur < 5400:
+                vids.append({"id": parts[0], "title": parts[1], "duration": dur})
+
+    if not vids:
+        log.error("[TNTL] No viable videos in playlist %s", playlist_url[:80])
+        return []
+
+    # Pick a random video from the playlist so we don't keep picking the
+    # top one across runs (would blow YouTube copyright alarms AND make
+    # every episode start from the same clip bank).
+    vid = random.choice(vids)
+    dl_path = output_dir / f"{vid['id']}.mp4"
+    if not dl_path.exists():
+        log.info("[TNTL] Downloading: %s (%dm)", vid["title"][:60], int(vid["duration"] / 60))
+        try:
+            subprocess.run([
+                "yt-dlp", *cookie_args,
+                "-f", "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/best[height<=1080]",
+                "--merge-output-format", "mp4", "-o", str(dl_path),
+                f"https://youtube.com/watch?v={vid['id']}",
+            ], capture_output=True, timeout=900)
+        except subprocess.TimeoutExpired:
+            log.error("[TNTL] Download timed out for %s", vid["id"])
+            return []
+
+    if not dl_path.exists():
+        log.error("[TNTL] Download produced no file for %s (likely YT "
+                  "bot-check). Export cookies.txt to "
+                  "~/.peanut_reacts/youtube_cookies.txt via the "
+                  "'Get cookies.txt LOCALLY' browser extension.",
+                  vid["id"])
+        return []
+
+    total_dur = _probe_duration(dl_path)
+    if total_dur < (num_clips * (clip_dur + 5) + 120):
+        log.warning("[TNTL] Video too short (%ds) for %d clips", int(total_dur), num_clips)
+        # Fall back: scale down num_clips to fit
+        num_clips = max(5, int((total_dur - 120) // (clip_dur + 5)))
+
+    # Extract evenly-spaced clips, skipping first/last 60s
+    margin = 60
+    usable_dur = total_dur - 2 * margin
+    spacing = usable_dur / num_clips
+    clips = []
+    for i in range(num_clips):
+        start = margin + spacing * (i + 0.5) - clip_dur / 2
+        if start < 0 or start + clip_dur > total_dur:
+            continue
+        clip_path = output_dir / f"clip_{i:02d}.mp4"
+        if not clip_path.exists():
+            subprocess.run([
+                "ffmpeg", "-y", "-ss", str(start), "-i", str(dl_path),
+                "-t", str(clip_dur), "-c:v", "libx264", "-preset", "veryfast",
+                "-c:a", "aac", str(clip_path),
+            ], capture_output=True, timeout=180)
+        if clip_path.exists():
+            clips.append(clip_path)
+
+    log.info("[TNTL] Extracted %d clips from playlist video '%s'",
+             len(clips), vid["title"][:60])
     return clips
 
 
@@ -651,18 +805,36 @@ def run_tntl_pipeline(
     upload_service=None,
     upload_privacy: str = "public",
     tags: list[str] = None,
+    playlist_urls: Optional[list[str]] = None,
 ) -> dict:
-    """Full TNTL pipeline: source → build → upload."""
+    """Full TNTL pipeline: source -> build -> upload.
+
+    Two source modes:
+    - If `playlist_urls` is given (e.g. uk_clips channel pointing at Sidemen
+      Among Us playlists), download from those playlists and extract evenly-
+      spaced clips.
+    - Else fall back to the original behavior: yt-dlp search for a
+      fail-compilation using FUNNY_QUERIES (for when any "try not to laugh"
+      source will do).
+
+    The rest of the pipeline (AI Peanut PIP, vision + verdict, ElevenLabs
+    voice, thumbnail, upload) is identical in both modes — same character,
+    same format, different source.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     result = {"video_path": None, "youtube_url": None, "errors": []}
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M")
     ep_dir = output_dir / f"episode_{timestamp}"
 
-    # Step 1: Source clips
-    log.info("[TNTL] Sourcing funny clips...")
+    # Step 1: Source clips — playlist mode or compilation-search mode
     clips_dir = ep_dir / "clips"
-    clips = source_funny_clips(clips_dir, num_clips=num_clips)
+    if playlist_urls:
+        log.info("[TNTL] Sourcing from %d playlist URL(s)...", len(playlist_urls))
+        clips = source_playlist_clips(playlist_urls, clips_dir, num_clips=num_clips)
+    else:
+        log.info("[TNTL] Sourcing funny clips via compilation search...")
+        clips = source_funny_clips(clips_dir, num_clips=num_clips)
     if len(clips) < 5:
         result["errors"].append(f"Only found {len(clips)} clips (need 5+)")
         return result

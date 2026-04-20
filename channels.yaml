@@ -5,32 +5,46 @@
 
 channels:
   # ── Channel 1: Peanut Reacts (Sidemen Among Us) ──────────────
-  # YouTube-scraping — must run on residential IP (PC), not VPS.
+  # Pivoted from "5hr silent compilation" (competitively doomed per
+  # research: Sidemen officials own 23M+ in same keywords, YPP rule
+  # now targets low-transformation compilations) to the same Peanut-
+  # reaction stack used by peanut_ksi: AI 3D character PIP, context-
+  # aware vision verdicts, calm British butler persona, 25s clips x 18.
+  # Source is the curated Sidemen Among Us playlists instead of generic
+  # fail compilations. Character IS the transformation -> fair-use safer.
   - id: uk_clips
-    name: "UK CLIPS (Peanut Reacts)"
+    name: "Peanut Reacts: Sidemen Among Us"
     character: peanut
     execution_env: local
-    source_type: playlist
+    source_type: tntl
     source_urls:
       - "https://www.youtube.com/playlist?list=PLhjLcvbbPVrVOY5w5Pl7KuSe5fGroQJJD"   # SIDEMEN AMONG US (full eps)
       - "https://www.youtube.com/playlist?list=PLhjLcvbbPVrVH8eMLy1_HhnQ_FeqpDTmT"   # SIDEMEN AMONG US COMPILATIONS
     tts_voice: "en-GB-RyanNeural"
-    tts_rate: "+15%"
+    tts_rate: "+5%"
     llm_personality: >
-      You are Peanut, an excitable animated peanut character watching Sidemen Among Us.
-      You're a massive fan. React with hype, shock, humor, and hot takes.
-      Keep reactions SHORT (1-2 sentences max). Be entertaining and loud.
-    reactions_per_minute: 6
-    gameplay_volume: 0.12
-    reaction_boost: 5.0
+      You are Peanut — a cracked-shell British peanut with the soul of a posh
+      Victorian butler who has found his one true passion in life: reacting to
+      Among Us. Your voice is calm, London-accented, theatrically understated.
+      You treat Sidemen Among Us gameplay moments (self-reports, vents, fake
+      tasks, emergency meetings, 200 IQ plays, absurd kills) with the gravitas
+      of a royal coronation — that mismatch IS the joke. You do NOT shout,
+      you do NOT spam hype; your weapon is dry, deadpan awe and surgical
+      one-liners. Speak in short bursts (3-10 words), ALL CAPS for emphasis
+      on key beats. End sentences with the British "me" tic ("I do love a
+      clean self-report, me"). Signature verdicts: "NO GAPS", "TO THE BRIM",
+      "BRIM ME BABY", "VERY IMPRESSIVE", "I NEED ANSWERS IMMEDIATELY",
+      "WE ARE SO BEHIND, STRATEGY WISE". Never mean, never cruel — sincerely,
+      hilariously invested in Among Us nonsense.
+    reactions_per_minute: 2
     schedule: "0 9 * * 1,3,5"
     oauth_token: "~/.peanut_reacts/youtube_token.json"
     client_secrets: "~/.peanut_reacts/client_secret.json"
-    upload_privacy: public
-    max_videos_per_run: 2
-    video_format: compilation
-    compilation_hours: 5
-    tags: ["sidemen", "among us", "peanut reacts", "reaction", "compilation", "gaming"]
+    # Unlisted until format proves out; flip to public once we see
+    # acceptable retention data from the first few episodes.
+    upload_privacy: unlisted
+    max_videos_per_run: 1
+    tags: ["sidemen", "among us", "peanut reacts", "reaction", "animated reaction", "british", "gaming", "cartoon"]
 
   # ── Channel 2: HasanAbi Archive (Chilli) ─────────────────────
   # Source: @HasanAbiArchivefan0 (full-length stream archives)

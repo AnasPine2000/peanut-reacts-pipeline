@@ -858,6 +858,14 @@ def run_tntl_channel_pipeline(
     db.start_job(job_id, "compile")
 
     try:
+        # If the channel defines source_urls (e.g. uk_clips points at
+        # Sidemen Among Us playlists), pass them as playlist_urls so the
+        # TNTL pipeline uses the curated playlist source instead of
+        # generic fail-compilation search. Channels that leave
+        # source_urls empty (or don't have the field) get the default
+        # "any viral fail compilation" behavior.
+        playlist_urls = getattr(channel, "source_urls", None) or None
+
         result = run_tntl_pipeline(
             output_dir=PROJECT_ROOT / settings.output_dir / channel.id,
             num_clips=18,
@@ -866,6 +874,7 @@ def run_tntl_channel_pipeline(
             upload_service=youtube_service,
             upload_privacy=channel.upload_privacy,
             tags=channel.tags,
+            playlist_urls=playlist_urls,
         )
 
         if result.get("youtube_url"):
