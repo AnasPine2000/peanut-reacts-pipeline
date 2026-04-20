@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-19T18:58:58.078156+00:00",
+  "generated_at": "2026-04-20T19:21:13.745650+00:00",
   "stats": {
     "total": 14,
     "done": 5,
@@ -9,10 +9,10 @@
   "channels": [
     {
       "id": "uk_clips",
-      "name": "UK CLIPS (Peanut Reacts)",
-      "source_type": "playlist",
+      "name": "Peanut Reacts: Sidemen Among Us",
+      "source_type": "live_reaction",
       "schedule": "0 9 * * 1,3,5",
-      "privacy": "public",
+      "privacy": "unlisted",
       "character": "peanut",
       "youtube": {
         "exists": true,
@@ -21,7 +21,7 @@
         "url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
         "handle_url": "https://www.youtube.com/@trooopz",
         "subscriber_count": 2,
-        "view_count": 15,
+        "view_count": 16,
         "video_count": 18,
         "thumbnail": "https://yt3.ggpht.com/ytc/AIdro_mymR-MbSZiXcxemf76BWkS2_J1h-FgBePsVD9r7FjOXZDjU4qX1ONi8S2eqHfN6i8s0w=s88-c-k-c0x00ffffff-no-rj",
         "banner": "",
@@ -33,12 +33,12 @@
             "title": "CASHEW READS THE MOST INSANE REDDIT STORIES | r/AmItheAsshole",
             "published_at": "2026-04-19T18:25:38Z",
             "thumbnail": "https://i.ytimg.com/vi/LiVxC4r2f6I/mqdefault.jpg",
-            "view_count": 0,
+            "view_count": 1,
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LiVxC4r2f6I",
             "duration": "PT5M17S",
-            "views": 0
+            "views": 1
           },
           {
             "id": "LPxEsMhnoZs",
@@ -106,8 +106,10 @@
         "among us",
         "peanut reacts",
         "reaction",
-        "compilation",
-        "gaming"
+        "animated reaction",
+        "british",
+        "gaming",
+        "cartoon"
       ],
       "character_profile": {
         "id": "peanut",
@@ -136,7 +138,7 @@
         "url": "https://www.youtube.com/channel/UCAkPwkYDPPpGjsdqszEjLLQ",
         "handle_url": "https://www.youtube.com/@hasanabiclips-44",
         "subscriber_count": 1,
-        "view_count": 1219,
+        "view_count": 1130,
         "video_count": 19,
         "thumbnail": "https://yt3.ggpht.com/ytc/AIdro_mAWg58IBKXFhu4bm3kI7I_ZggqkEUt9om22H0cLhyfl1LXB0Qf2Vc0JGtOYc7FAYKWCA=s88-c-k-c0x00ffffff-no-rj",
         "banner": "",
@@ -148,12 +150,12 @@
             "title": "HASAN DESTROYS Yale Debate In 10 MINUTES!",
             "published_at": "2026-04-16T11:42:47Z",
             "thumbnail": "https://i.ytimg.com/vi/lmoP_HLYTmU/mqdefault.jpg",
-            "view_count": 0,
+            "view_count": 1,
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=lmoP_HLYTmU",
             "duration": "PT10M1S",
-            "views": 0
+            "views": 1
           },
           {
             "id": "JCV7k88n1Qw",
@@ -172,12 +174,12 @@
             "title": "HASAN DESTROYS Yale Debate Opponents In EPIC RANT",
             "published_at": "2026-04-16T11:36:09Z",
             "thumbnail": "https://i.ytimg.com/vi/JhDjXDu9u-w/mqdefault.jpg",
-            "view_count": 0,
+            "view_count": 1,
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=JhDjXDu9u-w",
             "duration": "PT10M1S",
-            "views": 0
+            "views": 1
           },
           {
             "id": "9I9c7l17lfQ",
@@ -393,25 +395,86 @@
     },
     {
       "id": "peanut_ksi",
-      "name": "Peanut Reacts (KSI)",
-      "source_type": "playlist",
-      "schedule": "0 14 * * 2,4,6",
-      "privacy": "public",
-      "character": "pistachio",
+      "name": "Peanut Try Not To Laugh",
+      "source_type": "tntl",
+      "schedule": "0 14 * * 2,5",
+      "privacy": "unlisted",
+      "character": "peanut",
       "youtube": {
-        "exists": false,
-        "title": "Peanut Reacts (KSI)",
-        "handle": "",
-        "url": "",
-        "handle_url": "",
-        "subscriber_count": 0,
-        "view_count": 0,
-        "video_count": 0,
-        "thumbnail": "",
+        "exists": true,
+        "title": "Peanut Reacts",
+        "handle": "@trooopz",
+        "url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
+        "handle_url": "https://www.youtube.com/@trooopz",
+        "subscriber_count": 2,
+        "view_count": 16,
+        "video_count": 18,
+        "thumbnail": "https://yt3.ggpht.com/ytc/AIdro_mymR-MbSZiXcxemf76BWkS2_J1h-FgBePsVD9r7FjOXZDjU4qX1ONi8S2eqHfN6i8s0w=s88-c-k-c0x00ffffff-no-rj",
         "banner": "",
-        "description": "",
-        "country": "",
-        "latest_videos": [],
+        "description": "Peanut reacts to the MOST VIRAL TikToks! An animated peanut character watches trending, funny, and cute TikToks with hilarious reactions.\n\nNew Shorts DAILY!\n\nSubscribe for daily Peanut reactions to the best of TikTok!",
+        "country": "GB",
+        "latest_videos": [
+          {
+            "id": "LiVxC4r2f6I",
+            "title": "CASHEW READS THE MOST INSANE REDDIT STORIES | r/AmItheAsshole",
+            "published_at": "2026-04-19T18:25:38Z",
+            "thumbnail": "https://i.ytimg.com/vi/LiVxC4r2f6I/mqdefault.jpg",
+            "view_count": 1,
+            "like_count": 0,
+            "comment_count": 0,
+            "url": "https://youtube.com/watch?v=LiVxC4r2f6I",
+            "duration": "PT5M17S",
+            "views": 1
+          },
+          {
+            "id": "LPxEsMhnoZs",
+            "title": "Peanut: NO WAY THATS REAL | Viral TikTok Reaction #shorts #fyp",
+            "published_at": "2026-04-16T11:07:00Z",
+            "thumbnail": "https://i.ytimg.com/vi/LPxEsMhnoZs/mqdefault.jpg",
+            "view_count": 1,
+            "like_count": 1,
+            "comment_count": 0,
+            "url": "https://youtube.com/watch?v=LPxEsMhnoZs",
+            "duration": "PT42S",
+            "views": 1
+          },
+          {
+            "id": "dofXCsrIhck",
+            "title": "Peanut: I CANT STOP LAUGHING | Viral TikTok Reaction #shorts #fyp",
+            "published_at": "2026-04-16T11:06:33Z",
+            "thumbnail": "https://i.ytimg.com/vi/dofXCsrIhck/mqdefault.jpg",
+            "view_count": 1,
+            "like_count": 0,
+            "comment_count": 0,
+            "url": "https://youtube.com/watch?v=dofXCsrIhck",
+            "duration": "PT42S",
+            "views": 1
+          },
+          {
+            "id": "yYtcHnXeMtk",
+            "title": "Peanut: WHAT IS THIS! | Viral TikTok Reaction #shorts #fyp",
+            "published_at": "2026-04-16T11:06:22Z",
+            "thumbnail": "https://i.ytimg.com/vi/yYtcHnXeMtk/mqdefault.jpg",
+            "view_count": 1,
+            "like_count": 1,
+            "comment_count": 0,
+            "url": "https://youtube.com/watch?v=yYtcHnXeMtk",
+            "duration": "PT42S",
+            "views": 1
+          },
+          {
+            "id": "Eb37bW0nL1k",
+            "title": "Peanut Reacts: HAHAHA | Viral TikTok #shorts #fyp #viral #peanutreacts",
+            "published_at": "2026-04-16T10:47:34Z",
+            "thumbnail": "https://i.ytimg.com/vi/Eb37bW0nL1k/mqdefault.jpg",
+            "view_count": 1,
+            "like_count": 0,
+            "comment_count": 0,
+            "url": "https://youtube.com/watch?v=Eb37bW0nL1k",
+            "duration": "PT42S",
+            "views": 1
+          }
+        ],
         "error": null
       },
       "pipeline": {
@@ -420,26 +483,29 @@
         "last_run_at": null,
         "last_error": null
       },
-      "source_urls": [
-        "https://www.youtube.com/playlist?list=..."
-      ],
+      "source_urls": [],
       "tags": [
-        "ksi",
-        "reaction",
-        "peanut reacts",
-        "compilation"
+        "try not to laugh",
+        "tntl",
+        "peanut",
+        "animated reaction",
+        "british",
+        "cartoon",
+        "funny",
+        "memes",
+        "challenge"
       ],
       "character_profile": {
-        "id": "pistachio",
-        "name": "Pistachio",
-        "emoji": "\ud83d\udfe2",
-        "personality": "Cracked, unhinged, chaotic energy",
-        "voice": "en-GB-ThomasNeural",
-        "color": "#93C572",
-        "origin": "A pistachio that's lost it watching KSI videos",
-        "catchphrase": "I'M CRACKED!"
+        "id": "peanut",
+        "name": "Peanut",
+        "emoji": "\ud83e\udd5c",
+        "personality": "Excitable, loyal fan, hype reactions",
+        "voice": "en-GB-RyanNeural",
+        "color": "#D4A574",
+        "origin": "A passionate peanut who loves watching Sidemen content",
+        "catchphrase": "LET'S GOOO!"
       },
-      "youtube_url": "",
+      "youtube_url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
       "tiktok_url": ""
     },
     {
@@ -456,7 +522,7 @@
         "url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
         "handle_url": "https://www.youtube.com/@trooopz",
         "subscriber_count": 2,
-        "view_count": 15,
+        "view_count": 16,
         "video_count": 18,
         "thumbnail": "https://yt3.ggpht.com/ytc/AIdro_mymR-MbSZiXcxemf76BWkS2_J1h-FgBePsVD9r7FjOXZDjU4qX1ONi8S2eqHfN6i8s0w=s88-c-k-c0x00ffffff-no-rj",
         "banner": "",
@@ -468,12 +534,12 @@
             "title": "CASHEW READS THE MOST INSANE REDDIT STORIES | r/AmItheAsshole",
             "published_at": "2026-04-19T18:25:38Z",
             "thumbnail": "https://i.ytimg.com/vi/LiVxC4r2f6I/mqdefault.jpg",
-            "view_count": 0,
+            "view_count": 1,
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LiVxC4r2f6I",
             "duration": "PT5M17S",
-            "views": 0
+            "views": 1
           },
           {
             "id": "LPxEsMhnoZs",
@@ -569,7 +635,7 @@
         "url": "https://www.youtube.com/channel/UCArkt9KJyTcW3vQ8hK-lYtg",
         "handle_url": "https://www.youtube.com/@trooopz",
         "subscriber_count": 2,
-        "view_count": 15,
+        "view_count": 16,
         "video_count": 18,
         "thumbnail": "https://yt3.ggpht.com/ytc/AIdro_mymR-MbSZiXcxemf76BWkS2_J1h-FgBePsVD9r7FjOXZDjU4qX1ONi8S2eqHfN6i8s0w=s88-c-k-c0x00ffffff-no-rj",
         "banner": "",
@@ -581,12 +647,12 @@
             "title": "CASHEW READS THE MOST INSANE REDDIT STORIES | r/AmItheAsshole",
             "published_at": "2026-04-19T18:25:38Z",
             "thumbnail": "https://i.ytimg.com/vi/LiVxC4r2f6I/mqdefault.jpg",
-            "view_count": 0,
+            "view_count": 1,
             "like_count": 0,
             "comment_count": 0,
             "url": "https://youtube.com/watch?v=LiVxC4r2f6I",
             "duration": "PT5M17S",
-            "views": 0
+            "views": 1
           },
           {
             "id": "LPxEsMhnoZs",
@@ -954,10 +1020,10 @@
   },
   "network": {
     "total_channels": 8,
-    "active_channels": 4,
-    "total_subscribers": 7,
-    "total_views": 1264,
-    "total_videos": 73
+    "active_channels": 5,
+    "total_subscribers": 9,
+    "total_views": 1194,
+    "total_videos": 91
   },
   "days_active": 4,
   "current_month": 0,
@@ -977,5 +1043,10 @@
       18000,
       20000
     ]
+  },
+  "pipeline": {
+    "active": null,
+    "recent": [],
+    "updated_at": null
   }
 }

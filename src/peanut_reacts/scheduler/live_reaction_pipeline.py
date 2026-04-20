@@ -141,6 +141,144 @@ def _ytdlp_cookie_args() -> list[str]:
     return []
 
 
+def download_multiple_playlist_videos(
+    playlist_urls: list[str],
+    output_dir: Path,
+    count: int = 3,
+) -> list[Path]:
+    """Download `count` distinct videos from the pooled playlists.
+
+    Used for the compilation-style reaction format: Peanut reacts across
+    N concatenated Sidemen Among Us games in one long video. Matches the
+    3-8hr compilation content that performs best in the niche (per the
+    Sidemen Among Us competitive research).
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not playlist_urls:
+        log.error("[LIVE-RX] No playlist URLs provided")
+        return []
+
+    cookie_args = _ytdlp_cookie_args()
+
+    # Enumerate every playlist into one pool (same logic as single-video
+    # version, just different count at the end)
+    vids: list[dict] = []
+    for url in playlist_urls:
+        log.info("[LIVE-RX] Listing playlist: %s", url[:80])
+        try:
+            result = subprocess.run(
+                ["yt-dlp", *cookie_args, "--flat-playlist", "--print",
+                 "%(id)s\t%(title)s\t%(duration)s", url],
+                capture_output=True, text=True, timeout=120,
+            )
+        except Exception as e:
+            log.warning("[LIVE-RX] Playlist list failed for %s: %s", url[:50], e)
+            continue
+
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                try:
+                    dur = float(parts[2]) if len(parts) > 2 and parts[2] not in ("NA", "") else 0
+                except ValueError:
+                    dur = 0
+                # 10-35min sweet spot per video for compilation (keeps
+                # each "game" as a coherent chunk in the final video)
+                if 600 < dur < 2100:
+                    vids.append({"id": parts[0], "title": parts[1], "duration": dur})
+
+    if not vids:
+        log.error("[LIVE-RX] No viable videos for compilation")
+        return []
+
+    # Random pick N distinct videos
+    if count >= len(vids):
+        picks = vids
+    else:
+        picks = random.sample(vids, count)
+
+    total_min = sum(v["duration"] for v in picks) / 60
+    log.info("[LIVE-RX] Compilation: %d videos picked (%.1f min total)",
+             len(picks), total_min)
+
+    downloaded: list[Path] = []
+    for i, vid in enumerate(picks):
+        dl_path = output_dir / f"source_{i:02d}_{vid['id']}.mp4"
+        if not dl_path.exists():
+            log.info("[LIVE-RX] [%d/%d] Downloading: %s (%dmin)",
+                     i + 1, len(picks), vid["title"][:50], int(vid["duration"] / 60))
+            try:
+                subprocess.run([
+                    "yt-dlp", *cookie_args,
+                    "-f", "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/best[height<=1080]",
+                    "--merge-output-format", "mp4", "-o", str(dl_path),
+                    f"https://youtube.com/watch?v={vid['id']}",
+                ], capture_output=True, timeout=1500)
+            except subprocess.TimeoutExpired:
+                log.error("[LIVE-RX] Download timed out for %s", vid["id"])
+                continue
+        if dl_path.exists():
+            downloaded.append(dl_path)
+
+    log.info("[LIVE-RX] Downloaded %d/%d compilation sources", len(downloaded), len(picks))
+    return downloaded
+
+
+def concatenate_sources(video_paths: list[Path], output_path: Path) -> Optional[Path]:
+    """Concatenate N mp4s into one continuous source for reaction.
+
+    Re-encodes (not -c copy) because source videos from different
+    Sidemen uploads may have different codecs/fps/audio channel layouts
+    that would break concat-demuxer's -c copy. Slower but reliable.
+    Uses NVENC if available (h264_nvenc), else libx264 veryfast.
+    """
+    if not video_paths:
+        return None
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    list_file = output_path.parent / "_concat_list.txt"
+    list_file.write_text(
+        "\n".join(f"file '{p.resolve().as_posix()}'" for p in video_paths),
+        encoding="utf-8",
+    )
+
+    # Pick encoder: NVENC is ~3-5x faster for long videos on RTX cards
+    encoder = "libx264"
+    try:
+        from peanut_reacts.core.ffmpeg import nvenc_available
+        if nvenc_available():
+            encoder = "h264_nvenc"
+    except Exception:
+        pass
+    preset = "fast" if encoder == "h264_nvenc" else "veryfast"
+
+    log.info("[LIVE-RX] Concatenating %d sources (%s)...", len(video_paths), encoder)
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", str(list_file),
+            # Re-encode video to unify codec, fps, resolution
+            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,"
+                   "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1:1,fps=30",
+            "-c:v", encoder, "-preset", preset, "-crf", "22",
+            "-af", "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo",
+            "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p",
+            str(output_path),
+        ], check=True, capture_output=True, timeout=3600)
+    except subprocess.CalledProcessError as e:
+        log.error("[LIVE-RX] Concat failed: %s",
+                  e.stderr.decode("utf-8", errors="replace")[-400:])
+        return None
+    finally:
+        list_file.unlink(missing_ok=True)
+
+    log.info("[LIVE-RX] Concat done: %s (%d MB)",
+             output_path.name, output_path.stat().st_size // (1024 * 1024))
+    return output_path
+
+
 def download_full_playlist_video(
     playlist_urls: list[str],
     output_dir: Path,
@@ -464,8 +602,17 @@ def build_live_reaction_episode(
     character: str = "Peanut",
     voice: str = "en-GB-RyanNeural",
     rate: str = "+5%",
+    tracker=None,    # optional RunTracker from pipeline_status
 ) -> Optional[Path]:
     """Full live-reaction episode build: vision + verdicts + TTS + composite."""
+    def _t(method: str, *args, **kwargs):
+        """Safe tracker dispatch within build phase — never raises."""
+        if tracker is None:
+            return
+        try:
+            getattr(tracker, method)(*args, **kwargs)
+        except Exception:
+            pass
     from peanut_reacts.character.dynamic_facecam import (
         build_facecam_timeline, render_dynamic_facecam,
     )
@@ -482,14 +629,23 @@ def build_live_reaction_episode(
         return None
 
     # Step 2: vision + verdict per trigger
+    _t("begin_step", "verdicts",
+       f"Generating {len(triggers)} context-aware reactions",
+       progress_percent=25)
     log.info("[LIVE-RX] Generating context-aware reactions for %d triggers...",
              len(triggers))
     reactions = generate_reactions_for_episode(source_video, triggers, work_dir)
     if not reactions:
         log.error("[LIVE-RX] No reactions generated")
+        _t("finish", success=False, error="no reactions generated")
         return None
+    _t("update_progress", percent=45,
+       sub=f"{len(reactions)}/{len(triggers)} verdicts generated")
+    _t("complete_step", "verdicts")
 
     # Step 3: synthesize TTS for each reaction + record duration
+    _t("begin_step", "tts", f"Synthesizing {len(reactions)} verdict voices",
+       progress_percent=55)
     tts_dir = output_dir / "tts"
     tts_dir.mkdir(exist_ok=True)
     reactions_with_tts = []
@@ -525,6 +681,10 @@ def build_live_reaction_episode(
         clips_dir=clips_dir,
     )
 
+    _t("complete_step", "tts")
+    _t("begin_step", "facecam",
+       f"Rendering full-episode facecam ({total_dur / 60:.0f} min)",
+       progress_percent=65)
     facecam_path = work_dir / "facecam_full.mp4"
     log.info("[LIVE-RX] Rendering full-episode facecam (%.1fmin)...", total_dur / 60)
     rendered = render_dynamic_facecam(
@@ -534,6 +694,10 @@ def build_live_reaction_episode(
         log.error("[LIVE-RX] Facecam render failed")
         return None
 
+    _t("complete_step", "facecam")
+    _t("begin_step", "composite",
+       f"Compositing final episode ({total_dur / 60:.0f} min)",
+       progress_percent=75)
     # Step 5: single ffmpeg pass compositing everything
     final_path = output_dir / f"LIVE_RX_EP_{datetime.utcnow().strftime('%Y%m%d')}.mp4"
     log.info("[LIVE-RX] Compositing final episode...")
@@ -549,7 +713,18 @@ def build_live_reaction_episode(
 
     log.info("[LIVE-RX] Episode ready: %s (%d MB)", final_path.name,
              final_path.stat().st_size // (1024 * 1024))
+    _t("complete_step", "composite")
     return final_path
+
+
+def _try_status(*funcs):
+    """Run a status-tracker method if available; never raise.
+
+    Lets us instrument the pipeline without breaking runs if the
+    status module has a bug. Pass a list of (method_name, *args, **kwargs)
+    OR directly call with a single callable + args.
+    """
+    pass   # deprecated; use RunTracker directly — kept for future if needed
 
 
 def run_live_reaction_pipeline(
@@ -560,91 +735,186 @@ def run_live_reaction_pipeline(
     upload_service=None,
     upload_privacy: str = "public",
     tags: Optional[list[str]] = None,
+    num_source_videos: int = 1,
+    channel_id: str = "uk_clips",
+    channel_name: str = "",
 ) -> dict:
     """Full live-reaction pipeline: download -> reactions -> composite -> upload.
 
+    If `num_source_videos` > 1, downloads N distinct videos from the pooled
+    playlists and concatenates them into one long source before reacting.
+    Matches the 1-5hr Sidemen compilation format that dominates the niche.
+
     Returns {video_path, youtube_url, errors}.
     """
+    # Import lazily so a status-module bug can't break pipeline imports
+    try:
+        from peanut_reacts.scheduler.pipeline_status import RunTracker
+    except Exception as _e:
+        RunTracker = None   # type: ignore
+        log.warning("[LIVE-RX] pipeline_status unavailable: %s", _e)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     result: dict = {"video_path": None, "youtube_url": None, "errors": []}
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M")
     ep_dir = output_dir / f"live_rx_{timestamp}"
 
-    # Step 1: download ONE full video
-    log.info("[LIVE-RX] Sourcing full video from %d playlist(s)...", len(playlist_urls))
-    source_video = download_full_playlist_video(playlist_urls, ep_dir / "source")
-    if not source_video:
-        result["errors"].append("No source video downloaded")
-        return result
-
-    # Step 2: build the reaction episode
-    final = build_live_reaction_episode(
-        source_video=source_video,
-        output_dir=ep_dir,
-        character=character,
-        voice=voice,
+    # Build step list for the status tracker. Compilation runs have an
+    # extra "concat" phase vs single-video.
+    format_name = (
+        "live_reaction_compilation" if num_source_videos > 1 else "live_reaction_single"
     )
-    if not final:
-        result["errors"].append("Episode build failed")
-        return result
+    steps = (
+        ["download", "concat", "verdicts", "tts", "facecam", "composite", "upload"]
+        if num_source_videos > 1
+        else ["download", "verdicts", "tts", "facecam", "composite", "upload"]
+    )
 
-    result["video_path"] = str(final)
-
-    # Step 3 (optional): upload
-    if upload_service:
+    tracker = None
+    if RunTracker is not None:
         try:
-            from peanut_reacts.upload.youtube_upload import YouTubeUploader, UploadMetadata
-            from peanut_reacts.character.thumbnail_tntl import (
-                generate_tntl_thumbnail_for_episode,
+            tracker = RunTracker(
+                channel_id=channel_id,
+                channel_name=channel_name or channel_id,
+                format=format_name,
+                source_title=(
+                    f"{num_source_videos}-video Sidemen compilation"
+                    if num_source_videos > 1 else "1 Sidemen video"
+                ),
+                steps=steps,
             )
+            tracker.__enter__()   # writes initial snapshot
+        except Exception as _e:
+            log.warning("[LIVE-RX] tracker init failed: %s", _e)
+            tracker = None
+
+    def _t(method: str, *args, **kwargs):
+        """Safe tracker dispatch — never raises."""
+        if tracker is None:
+            return
+        try:
+            getattr(tracker, method)(*args, **kwargs)
+        except Exception as _e:
+            log.debug("[LIVE-RX] tracker.%s failed: %s", method, _e)
+
+    try:
+        # Step 1: download source(s). For compilation runs (count > 1) we
+        # download multiple videos and concatenate them into one continuous
+        # source before the reaction pipeline runs.
+        if num_source_videos <= 1:
+            _t("begin_step", "download", "Downloading 1 Sidemen video", progress_percent=5)
+            log.info("[LIVE-RX] Sourcing 1 video from %d playlist(s)...", len(playlist_urls))
+            source_video = download_full_playlist_video(playlist_urls, ep_dir / "source")
+            if not source_video:
+                result["errors"].append("No source video downloaded")
+                _t("finish", success=False, error="download failed")
+                return result
+            _t("complete_step", "download")
+        else:
+            _t("begin_step", "download",
+               f"Downloading {num_source_videos} Sidemen videos",
+               progress_percent=5)
+            log.info("[LIVE-RX] Sourcing COMPILATION (%d videos) from %d playlist(s)...",
+                     num_source_videos, len(playlist_urls))
+            sources = download_multiple_playlist_videos(
+                playlist_urls, ep_dir / "source", count=num_source_videos,
+            )
+            if len(sources) < 2:
+                result["errors"].append(
+                    f"Compilation needs >= 2 sources, got {len(sources)}"
+                )
+                _t("finish", success=False, error="not enough sources downloaded")
+                return result
+            _t("complete_step", "download")
+            _t("begin_step", "concat", "Concatenating source videos (NVENC)",
+               progress_percent=15)
+            source_video = ep_dir / "source" / "_concatenated.mp4"
+            concatenated = concatenate_sources(sources, source_video)
+            if not concatenated:
+                result["errors"].append("Source concatenation failed")
+                _t("finish", success=False, error="concat failed")
+                return result
+            source_video = concatenated
+            _t("complete_step", "concat")
+
+        # Step 2: build the reaction episode (passes tracker for nested updates)
+        final = build_live_reaction_episode(
+            source_video=source_video,
+            output_dir=ep_dir,
+            character=character,
+            voice=voice,
+            tracker=tracker,
+        )
+        if not final:
+            result["errors"].append("Episode build failed")
+            _t("finish", success=False, error="episode build failed")
+            return result
+
+        result["video_path"] = str(final)
+
+        # Step 3 (optional): upload
+        if upload_service:
+            _t("begin_step", "upload", "Uploading to YouTube", progress_percent=92)
+            try:
+                from peanut_reacts.upload.youtube_upload import YouTubeUploader, UploadMetadata
+                from peanut_reacts.character.thumbnail_tntl import (
+                    generate_tntl_thumbnail_for_episode,
+                )
 
             # Thumbnail: reuse TNTL generator — it picks a frame from a
             # clip, so we give it the full source video as a single
-            # "clip" and pick a mid-video frame. Caption from a verdict.
-            thumbnail_path = ep_dir / f"thumb_{timestamp}.jpg"
-            try:
-                generate_tntl_thumbnail_for_episode(
-                    episode_clips=[source_video],
-                    output_path=thumbnail_path,
-                    caption="I NEED ANSWERS",
+                # "clip" and pick a mid-video frame. Caption from a verdict.
+                thumbnail_path = ep_dir / f"thumb_{timestamp}.jpg"
+                try:
+                    generate_tntl_thumbnail_for_episode(
+                        episode_clips=[source_video],
+                        output_path=thumbnail_path,
+                        caption="I NEED ANSWERS",
+                    )
+                except Exception as e:
+                    log.warning("[LIVE-RX] Thumbnail failed: %s", e)
+                    thumbnail_path = None
+
+                titles = [
+                    f"{character.upper()} REACTS TO SIDEMEN AMONG US (LIVE)",
+                    f"{character.upper()} WATCHES SIDEMEN AMONG US FOR THE FIRST TIME",
+                    f"A BRITISH PEANUT WATCHES SIDEMEN AMONG US",
+                    f"I NEED ANSWERS IMMEDIATELY — {character.upper()} REACTS TO SIDEMEN",
+                    f"NO GAPS. SIDEMEN AMONG US LIVE REACTION.",
+                ]
+                title = random.choice(titles)
+
+                uploader = YouTubeUploader(upload_service)
+                meta = UploadMetadata(
+                    title=title[:100],
+                    description=(
+                        f"{character} watches a full Sidemen Among Us episode, "
+                        f"British calm commentary throughout.\n\n"
+                        f"New episodes weekly. Subscribe if you laughed, me.\n\n"
+                        f"#sidemen #amongus #{character.lower()}reacts "
+                        f"#animatedreaction #british"
+                    ),
+                    tags=(tags or []) + [
+                        "sidemen", "among us", "reaction", "animated reaction",
+                        "peanut reacts", "british", character.lower(),
+                    ],
+                    category_id="24",
+                    privacy_status=upload_privacy,
+                    thumbnail_path=thumbnail_path if thumbnail_path and thumbnail_path.exists() else None,
                 )
+                up_result = uploader.upload_video(final, meta)
+                result["youtube_url"] = up_result.url
+                log.info("[LIVE-RX] Uploaded: %s", up_result.url)
+                _t("complete_step", "upload")
             except Exception as e:
-                log.warning("[LIVE-RX] Thumbnail failed: %s", e)
-                thumbnail_path = None
+                log.error("[LIVE-RX] Upload failed: %s", e)
+                result["errors"].append(f"Upload: {e}")
 
-            titles = [
-                f"{character.upper()} REACTS TO SIDEMEN AMONG US (LIVE)",
-                f"{character.upper()} WATCHES SIDEMEN AMONG US FOR THE FIRST TIME",
-                f"A BRITISH PEANUT WATCHES SIDEMEN AMONG US",
-                f"I NEED ANSWERS IMMEDIATELY — {character.upper()} REACTS TO SIDEMEN",
-                f"NO GAPS. SIDEMEN AMONG US LIVE REACTION.",
-            ]
-            title = random.choice(titles)
-
-            uploader = YouTubeUploader(upload_service)
-            meta = UploadMetadata(
-                title=title[:100],
-                description=(
-                    f"{character} watches a full Sidemen Among Us episode, "
-                    f"British calm commentary throughout.\n\n"
-                    f"New episodes weekly. Subscribe if you laughed, me.\n\n"
-                    f"#sidemen #amongus #{character.lower()}reacts "
-                    f"#animatedreaction #british"
-                ),
-                tags=(tags or []) + [
-                    "sidemen", "among us", "reaction", "animated reaction",
-                    "peanut reacts", "british", character.lower(),
-                ],
-                category_id="24",
-                privacy_status=upload_privacy,
-                thumbnail_path=thumbnail_path if thumbnail_path and thumbnail_path.exists() else None,
-            )
-            up_result = uploader.upload_video(final, meta)
-            result["youtube_url"] = up_result.url
-            log.info("[LIVE-RX] Uploaded: %s", up_result.url)
-        except Exception as e:
-            log.error("[LIVE-RX] Upload failed: %s", e)
-            result["errors"].append(f"Upload: {e}")
-
-    return result
+        _t("finish", success=True,
+           youtube_url=result.get("youtube_url"),
+           title=title if "title" in dir() else None)
+        return result
+    except Exception as _e:
+        _t("finish", success=False, error=f"{type(_e).__name__}: {_e}")
+        raise

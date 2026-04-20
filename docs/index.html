@@ -99,6 +99,8 @@
             <div class="links" id="header-links"></div>
         </div>
 
+        <div id="live-pipeline-card"></div>
+
         <div class="stats-grid" id="stats-grid"></div>
 
         <div class="tabs" id="tabs">
@@ -171,12 +173,109 @@
             <div class="stat-card"><div class="value">M${d.current_month}</div><div class="label">Current Month</div></div>
         `;
 
+        renderLivePipeline();
         renderChannels();
         renderProjections();
         renderAnalytics();
         renderPipeline();
 
         document.getElementById('updated').textContent = `Last updated: ${new Date(d.generated_at).toLocaleString()} | Auto-refreshes every 5 minutes`;
+    }
+
+    function _fmtDuration(seconds) {
+        if (!seconds && seconds !== 0) return '—';
+        seconds = Math.floor(Number(seconds));
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    }
+
+    function _fmtRelative(isoTs) {
+        if (!isoTs) return '—';
+        const then = new Date(isoTs).getTime();
+        if (isNaN(then)) return '—';
+        const diff = Math.floor((Date.now() - then) / 1000);
+        if (diff < 60) return `${diff}s ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        return `${Math.floor(diff / 86400)}d ago`;
+    }
+
+    function renderLivePipeline() {
+        const card = document.getElementById('live-pipeline-card');
+        const pipe = (DATA && DATA.pipeline) || { active: null, recent: [] };
+        const active = pipe.active;
+        const recent = pipe.recent || [];
+
+        // Don't render anything if there's no active run AND no recent
+        if (!active && recent.length === 0) {
+            card.innerHTML = '';
+            return;
+        }
+
+        let activeHtml = '';
+        if (active) {
+            const elapsed = _fmtDuration(active.elapsed_seconds);
+            const pct = Math.max(0, Math.min(100, Number(active.progress_percent) || 0));
+            const stepsDone = (active.steps_completed || []).length;
+            const stepsLeft = (active.steps_remaining || []).length;
+            const totalSteps = stepsDone + stepsLeft + (active.current_step && active.current_step !== 'done' ? 1 : 0);
+            activeHtml = `
+                <div style="background: linear-gradient(135deg, #1e2a4a 0%, #1a1d27 100%);
+                            border: 1px solid var(--accent); border-radius: 12px;
+                            padding: 20px; margin-bottom: 20px; position: relative; overflow: hidden;">
+                    <div style="position: absolute; top: 12px; right: 16px;
+                                font-size: 0.7rem; color: var(--green); font-weight: 600;
+                                text-transform: uppercase; letter-spacing: 1px;">
+                        ● LIVE — ${elapsed}
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">
+                        Active pipeline run — ${active.channel_name || active.channel_id}
+                    </div>
+                    <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 14px;">
+                        ${active.current_step || active.phase || 'starting'}
+                    </div>
+                    ${active.step_progress ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">${active.step_progress}</div>` : ''}
+                    <div class="progress-bar" style="margin-bottom: 10px;">
+                        <div class="fill green" style="width: ${pct}%; transition: width 1s;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
+                        <span>${pct}% · ${active.format || ''}${active.source_title ? ` · ${active.source_title}` : ''}</span>
+                        <span>${stepsDone}/${totalSteps} steps · ETA ≈ ${active.eta_seconds ? _fmtDuration(active.eta_seconds) : '?'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        let recentHtml = '';
+        if (recent.length > 0) {
+            recentHtml = `
+                <div style="background: var(--card); border: 1px solid var(--border);
+                            border-radius: 12px; padding: 14px 20px; margin-bottom: 20px;">
+                    <div style="font-size: 0.75rem; color: var(--text-muted);
+                                text-transform: uppercase; letter-spacing: 1px;
+                                margin-bottom: 10px;">Recent uploads</div>
+                    ${recent.slice(0, 5).map(r => `
+                        <div style="display: flex; justify-content: space-between;
+                                    padding: 6px 0; border-top: 1px solid var(--border);
+                                    font-size: 0.85rem;">
+                            <a href="${r.youtube_url || '#'}" target="_blank"
+                               style="color: var(--blue); text-decoration: none;">
+                                ${(r.title || '(untitled)').slice(0, 55)}
+                            </a>
+                            <span style="color: var(--text-muted);">
+                                ${r.channel_id} · ${_fmtRelative(r.uploaded_at)}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        card.innerHTML = activeHtml + recentHtml;
     }
 
     function renderChannels() {
@@ -395,9 +494,20 @@
         }
     });
 
-    // Load and auto-refresh
+    // Load and adaptive auto-refresh: 15s when a pipeline is running,
+    // 5 min otherwise (keeps bandwidth low when idle).
     loadData();
-    setInterval(loadData, 300000); // 5 min
+    let _refreshTimer = null;
+    function scheduleNextRefresh() {
+        if (_refreshTimer) clearTimeout(_refreshTimer);
+        const active = DATA && DATA.pipeline && DATA.pipeline.active;
+        const delayMs = active ? 15000 : 300000;
+        _refreshTimer = setTimeout(() => {
+            loadData().finally(scheduleNextRefresh);
+        }, delayMs);
+    }
+    // Kick off adaptive loop after first load settles
+    setTimeout(scheduleNextRefresh, 3000);
     </script>
 </body>
 </html>

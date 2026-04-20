@@ -100,6 +100,18 @@ def _enrich_with_network_totals(status: dict) -> dict:
     status.setdefault("projections", {
         "targets": [0, 0, 0, 100, 500, 1000, 2500, 5000, 8000, 12000, 15000, 18000, 20000],
     })
+
+    # Merge live pipeline status (active run + recent uploads) so the
+    # dashboard can render the Live Pipeline card. The status file is
+    # written by the pipeline itself via pipeline_status.RunTracker.
+    try:
+        from peanut_reacts.scheduler.pipeline_status import read_status
+        status["pipeline"] = read_status()
+    except Exception as e:
+        import sys
+        print(f"[WARN] Could not load pipeline_status: {e}", file=sys.stderr)
+        status["pipeline"] = {"active": None, "recent": [], "updated_at": None}
+
     return status
 
 
