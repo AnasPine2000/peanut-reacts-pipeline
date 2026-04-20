@@ -71,6 +71,15 @@ EMOTION_TO_CLIPS = {
     "idle": ["peanut_idle.mp4"],
     "calm": ["peanut_idle.mp4"],
     "": ["peanut_idle.mp4"],
+
+    # ── Phase 2 "special" animations (Peanut-specific visual gags) ──
+    # These are the escalated versions used for peak reaction moments.
+    # Chosen by DeepSeek when a verdict calls for something beyond the
+    # standard 6 emotions. Each maps to a dedicated Kling clip.
+    "shell_crack":  ["peanut_shell_crack.mp4", "peanut_shocked.mp4"],   # fallback: shocked
+    "mouth_clamp":  ["peanut_mouth_clamp.mp4", "peanut_facepalm.mp4"],  # fallback: facepalm
+    "spit_take":    ["peanut_spit_take.mp4", "peanut_shocked.mp4"],     # fallback: shocked
+    "explode":      ["peanut_explode.mp4", "peanut_celebrating.mp4"],   # fallback: celebrating
 }
 
 

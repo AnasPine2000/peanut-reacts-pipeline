@@ -207,8 +207,16 @@ class Verdict:
 
 
 VALID_EMOTIONS = {
+    # Standard emotion set (mapped 1:1 to clips in data/ai_peanut_clips)
     "idle", "laughing", "shocked", "confused", "sarcastic", "facepalm",
     "scared", "excited", "celebrating",
+    # Phase 2 "special" animations — Peanut-specific visual gags that
+    # escalate beyond standard emotions. Use sparingly, for peak-moment
+    # verdicts only (DeepSeek should treat these as the "nuclear option").
+    "shell_crack",   # shell visibly cracks -> tension/about-to-break
+    "mouth_clamp",   # hands over mouth, fighting the laugh
+    "spit_take",     # peanut butter spray -> shock/disbelief
+    "explode",       # shell splits + kernel pops -> total defeat
 }
 
 
@@ -260,8 +268,14 @@ def generate_verdict(
         "Output ONLY a JSON object with keys:\n"
         "- text: your verdict (3-10 words, ALL CAPS for emphasis, British voice)\n"
         "- outcome: \"survive\" or \"fail\" (did the clip make you crack up?)\n"
-        "- emotion: one of [idle, laughing, shocked, confused, sarcastic, facepalm, scared, excited]\n"
-        "- intensity: 0.0 to 1.0 (how big the reaction is)\n\n"
+        "- emotion: one of:\n"
+        "    Standard: idle, laughing, shocked, confused, sarcastic, facepalm, scared, excited, celebrating\n"
+        "    Escalated (use for biggest peak moments only, roughly 1 in 5 clips):\n"
+        "      - shell_crack: cracking shell, tension, about-to-break\n"
+        "      - mouth_clamp: hands over mouth, fighting the laugh\n"
+        "      - spit_take: peanut butter spray, genuine shock/disbelief\n"
+        "      - explode: shell splits and kernel pops — total defeat\n"
+        "- intensity: 0.0 to 1.0 (how big the reaction is; pair intensity 0.85+ with an escalated emotion)\n\n"
         "Example output: {\"text\": \"AND THERE IT IS. GAP IN THE SHELL.\", "
         "\"outcome\": \"fail\", \"emotion\": \"laughing\", \"intensity\": 0.8}\n\n"
         "No preamble, no explanation, just the JSON."

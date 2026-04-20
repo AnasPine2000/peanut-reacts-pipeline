@@ -134,6 +134,45 @@ CLIP_RECIPES = {
                          "character design",
         "duration_s": 5,
     },
+
+    # ── Phase 2 special animations (Peanut-specific visual gags the
+    # research said we can do that KSI can't — cartoon is a feature here).
+    # Used by DeepSeek when a verdict calls for an escalated physical
+    # reaction beyond the standard 6 emotions.
+    "peanut_shell_crack": {
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character with a visible hairline crack "
+                         "appearing on shell, crack slowly growing larger across the "
+                         "body, wide startled eyes, shell vibration, dust particles "
+                         "falling, dramatic comedic tension, camera static, preserve "
+                         "exact character design",
+        "duration_s": 5,
+    },
+    "peanut_mouth_clamp": {
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character trying desperately not to laugh, "
+                         "both small hands clamped over the mouth, cheeks puffed out, "
+                         "eyes squeezed shut, shoulders trembling from held-in "
+                         "laughter, camera static, preserve exact character design",
+        "duration_s": 5,
+    },
+    "peanut_spit_take": {
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character performing a huge comedic "
+                         "spit-take, mouth erupting with a spray of peanut butter, "
+                         "eyes bulging in shocked disbelief, arms flying up, "
+                         "head jerking back, camera static, preserve exact character "
+                         "design",
+        "duration_s": 5,
+    },
+    "peanut_explode": {
+        "source_image": _SINGLE_SOURCE_IMAGE,
+        "motion_prompt": "cartoon peanut character's shell splitting open and the "
+                         "inner kernel popping out upward in surprise then snapping "
+                         "back into place with a satisfied smile, comedic spring "
+                         "animation, camera static, preserve exact character design",
+        "duration_s": 5,
+    },
 }
 
 
