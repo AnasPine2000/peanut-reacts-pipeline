@@ -16,7 +16,9 @@ channels:
     name: "Peanut Reacts: Sidemen Among Us"
     character: peanut
     execution_env: local
-    source_type: tntl
+    # live_reaction: Peanut watches the FULL Sidemen episode (20-30min)
+    # and interjects ~every 60s. NOT the TNTL clip-chop format.
+    source_type: live_reaction
     source_urls:
       - "https://www.youtube.com/playlist?list=PLhjLcvbbPVrVOY5w5Pl7KuSe5fGroQJJD"   # SIDEMEN AMONG US (full eps)
       - "https://www.youtube.com/playlist?list=PLhjLcvbbPVrVH8eMLy1_HhnQ_FeqpDTmT"   # SIDEMEN AMONG US COMPILATIONS

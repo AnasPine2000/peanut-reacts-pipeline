@@ -893,6 +893,76 @@ def run_tntl_channel_pipeline(
         return 0, 1
 
 
+def run_live_reaction_channel_pipeline(
+    channel: ChannelConfig,
+    settings: GlobalSettings,
+    db: PipelineDB,
+) -> tuple[int, int]:
+    """Run the live-reaction pipeline (full episode + continuous Peanut PIP).
+
+    Unlike TNTL which chops source into clips and drops a verdict at the
+    end of each, the live-reaction format keeps the source video intact
+    and sprinkles Peanut reactions at ~60s intervals throughout. Output
+    episode length = source length (plus intro/outro). Used by the
+    uk_clips Sidemen Among Us channel.
+
+    Requires channel.source_urls (playlists to source from).
+    """
+    from peanut_reacts.scheduler.live_reaction_pipeline import run_live_reaction_pipeline
+
+    # YouTube auth (same defensive pattern as other channels)
+    youtube_service = None
+    if channel.client_secrets and channel.oauth_token:
+        try:
+            from peanut_reacts.upload.youtube_auth import get_authenticated_service
+            token_path = Path(channel.oauth_token).expanduser()
+            secrets_path = Path(channel.client_secrets).expanduser()
+            if token_path.exists() and secrets_path.exists():
+                youtube_service = get_authenticated_service(
+                    secrets_path, token_path=token_path, interactive=False,
+                )
+                log.info("[%s] YouTube auth OK (live_reaction)", channel.id)
+            else:
+                log.warning("[%s] live_reaction auth paths missing: token=%s(%s) secrets=%s(%s)",
+                            channel.id, token_path, token_path.exists(),
+                            secrets_path, secrets_path.exists())
+        except Exception as e:
+            log.warning("[%s] YouTube auth failed (live_reaction): %s", channel.id, e)
+
+    playlist_urls = getattr(channel, "source_urls", None) or []
+    if not playlist_urls:
+        log.error("[%s] live_reaction requires source_urls", channel.id)
+        return 0, 1
+
+    job_id = db.create_job(channel.id, "", "Live reaction episode")
+    db.start_job(job_id, "compile")
+
+    try:
+        result = run_live_reaction_pipeline(
+            output_dir=PROJECT_ROOT / settings.output_dir / channel.id,
+            playlist_urls=playlist_urls,
+            character=(channel.character or "Peanut").capitalize(),
+            voice=channel.tts_voice or "en-GB-RyanNeural",
+            upload_service=youtube_service,
+            upload_privacy=channel.upload_privacy,
+            tags=channel.tags,
+        )
+        if result.get("youtube_url"):
+            db.complete_job(job_id, result.get("video_path", ""), result["youtube_url"])
+            return 1, 0
+        elif result.get("video_path"):
+            db.complete_job(job_id, result["video_path"])
+            return 1, 0
+        else:
+            errs = "; ".join(result.get("errors", [])) or "Unknown live_reaction failure"
+            db.fail_job(job_id, errs)
+            return 0, 1
+    except Exception as e:
+        log.error("[%s] live_reaction pipeline crashed: %s", channel.id, e)
+        db.fail_job(job_id, str(e))
+        return 0, 1
+
+
 PIPELINE_MAP = {
     "playlist": run_reaction_pipeline,
     "twitch_vod": run_twitch_pipeline,
@@ -901,6 +971,7 @@ PIPELINE_MAP = {
     "reddit": run_reddit_pipeline,
     "ambient": run_ambient_pipeline,
     "tntl": run_tntl_channel_pipeline,
+    "live_reaction": run_live_reaction_channel_pipeline,
 }
 
 

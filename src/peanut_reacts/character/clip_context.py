@@ -46,6 +46,25 @@ GROQ_VISION_FALLBACKS = [
     "meta-llama/llama-4-maverick-17b-128e-instruct",
 ]
 
+# Module-level throttle: remember last successful Groq call time so
+# burst callers (e.g. live_reaction_pipeline firing 35 describe_clip
+# calls in a row) don't exhaust the free tier's per-minute quota. The
+# free tier's vision RPM is conservative; sleeping ~2s between calls
+# keeps us safely under the cap and avoids the 429 + fallback cascade
+# that causes DeepSeek to anchor on "THE VISION IS GONE" meta-verdicts.
+_GROQ_MIN_INTERVAL_S = 2.0
+_last_groq_call_ts = 0.0
+
+
+def _groq_throttle() -> None:
+    """Block briefly if the last successful Groq call was too recent."""
+    import time as _time
+    global _last_groq_call_ts
+    elapsed = _time.time() - _last_groq_call_ts
+    if elapsed < _GROQ_MIN_INTERVAL_S:
+        _time.sleep(_GROQ_MIN_INTERVAL_S - elapsed)
+    _last_groq_call_ts = _time.time()
+
 
 def _extract_frame_as_b64(clip_path: Path, at_seconds: float) -> Optional[str]:
     """Extract one frame as base64-encoded JPEG data URL."""
@@ -128,6 +147,7 @@ def describe_clip(clip_path: Path, num_frames: int = 3) -> str:
         # into "18 calls paced over 60 seconds = zero rate limits".
         for attempt in range(3):
             try:
+                _groq_throttle()    # space out rapid successive calls
                 resp = httpx.post(
                     GROQ_VISION_URL,
                     headers={"Authorization": f"Bearer {api_key}",
@@ -242,16 +262,28 @@ def _parse_verdict_json(raw: str) -> Optional[dict]:
     return None
 
 
+def _normalize_for_dedup(text: str) -> str:
+    """Normalize verdict text for exact-match dedup checks."""
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
 def generate_verdict(
     clip_description: str,
     history: Optional[list[str]] = None,
     persona: str = PEANUT_TNTL_PERSONA,
-    temperature: float = 0.85,
+    temperature: float = 1.05,   # bumped from 0.85 to force variance
+    _retry_depth: int = 0,
 ) -> Verdict:
     """Ask DeepSeek for Peanut's verdict on this clip.
 
     Returns a Verdict. Always returns something — falls back to a boring
     safe verdict if the API call fails so the pipeline never dies.
+
+    If the first attempt produces text that already exists verbatim in
+    `history`, we retry up to 2x with bumped temperature + an explicit
+    "that exact line was rejected, try a different one" note. DeepSeek
+    otherwise locks onto a phrase when Groq vision descriptions come
+    back too similar (the v3.2c smoke showed this repeatedly).
     """
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
@@ -259,8 +291,33 @@ def generate_verdict(
                        emotion="idle", intensity=0.3)
 
     history = history or []
-    recent = "\n".join(f"- {h}" for h in history[-5:])  # last 5 only
-    avoid_block = f"\nRecent lines you've said (avoid repeating or using the same structure):\n{recent}\n" if recent else ""
+    # Use a wider history window (last 10) and include a hard "don't
+    # reuse any signature phrase that appeared in this episode" rule.
+    # The v3.2c smoke showed DeepSeek locking onto "I NEED ANSWERS
+    # IMMEDIATELY" for 5/6 clips when descriptions were similar —
+    # this block makes repetition impossible rather than discouraged.
+    recent = "\n".join(f"- {h}" for h in history[-10:])
+    used_phrases: set[str] = set()
+    for line in history:
+        upper = line.upper()
+        for phrase in (
+            "NO GAPS", "TO THE BRIM", "BRIM ME BABY", "VERY IMPRESSIVE",
+            "I NEED ANSWERS IMMEDIATELY", "WE ARE SO BEHIND",
+            "LOST FOR WORDS", "WELL HELLO TO YOU TOO",
+        ):
+            if phrase in upper:
+                used_phrases.add(phrase)
+
+    avoid_block = ""
+    if recent:
+        avoid_block = f"\nPrevious lines you've said this episode:\n{recent}\n"
+    if used_phrases:
+        avoid_block += (
+            f"\nSignature phrases you have ALREADY used this episode "
+            f"(FORBIDDEN for this verdict, even in modified form):\n"
+            f"  {', '.join(sorted(used_phrases))}\n"
+            f"Use a DIFFERENT signature phrase, or no signature at all.\n"
+        )
 
     user_prompt = (
         f"The clip: {clip_description}\n"
@@ -326,6 +383,31 @@ def generate_verdict(
         intensity = max(0.0, min(1.0, intensity))
     except (TypeError, ValueError):
         intensity = 0.5
+
+    # Exact-match dedup: if DeepSeek produced a line we've already said,
+    # retry up to twice with higher temperature + an explicit rejection.
+    # This catches the "DeepSeek locks onto one phrase when descriptions
+    # are similar" failure mode that blew up the v3.3 Among Us smoke.
+    if _retry_depth < 2 and history:
+        norm_new = _normalize_for_dedup(text)
+        if any(_normalize_for_dedup(prev) == norm_new for prev in history):
+            log.warning("[CTX] Duplicate verdict %r — regenerating (depth %d)",
+                        text, _retry_depth + 1)
+            # Build a nastier persona prompt that explicitly rejects
+            # this output and bumps heat
+            rejected_prompt = (
+                f"{persona}\n\n"
+                f"CRITICAL: You previously tried to output the verdict "
+                f"'{text}' but it is IDENTICAL to a prior line in this "
+                f"episode. That is strictly forbidden. Use a structurally "
+                f"DIFFERENT line — different opening word, different "
+                f"signature phrase (or no signature at all). Surprise me."
+            )
+            return generate_verdict(
+                clip_description, history=history, persona=rejected_prompt,
+                temperature=min(1.3, temperature + 0.15),
+                _retry_depth=_retry_depth + 1,
+            )
 
     log.info("[CTX] Verdict: text=%r outcome=%s emotion=%s intensity=%.2f",
              text, outcome, emotion, intensity)
