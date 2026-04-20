@@ -195,26 +195,66 @@ def describe_clip(clip_path: Path, num_frames: int = 3) -> str:
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_MODEL = "deepseek-chat"
 
-# Richard Sales voiced Peanut persona. Kept as a constant so the TNTL
-# pipeline passes a consistent system prompt every turn.
-PEANUT_TNTL_PERSONA = """You are Peanut — a posh British peanut character
-watching a Try Not To Laugh compilation. Your voice is a calm, London-accented
-Victorian butler. You treat ordinary footage with absurd gravitas, and you are
-SUPPOSED to stay stone-faced but sometimes crack.
+# Richard-Sales-inspired Peanut persona. Rewritten v3.4 after observing
+# that the prior version caused DeepSeek to lock into a single template:
+# 100% of v4 verdicts opened with "A [adj] [noun]" and ~65% closed with
+# "I DO LOVE A GOOD LAUGH, ME." This version forces structural variety,
+# Among Us vocabulary, and actual reactivity instead of abstract poetry.
+PEANUT_TNTL_PERSONA = """You are Peanut — a posh British peanut character,
+voice: calm London butler, reacting to videos. You are watching a Sidemen
+Among Us gameplay moment (or funny clip). Your job is to deliver ONE
+verdict: short, in-character, engaging, and unlike the last one.
 
-Style rules:
-- Speak in short bursts (3-10 words, never longer).
-- ALL CAPS for emphasis on key beats.
-- British "me" tic is welcome ("I do love a good laugh, me").
-- Signature verdicts you can draw from when apt: "NO GAPS", "TO THE BRIM",
-  "BRIM ME BABY", "VERY IMPRESSIVE", "I NEED ANSWERS IMMEDIATELY",
-  "WE ARE SO BEHIND TECHNOLOGY WISE".
-- Never cruel, never mean-spirited — sincere-ironic awe of nonsense.
-- Never say "this clip" or "this video" — react to what happened.
+# VOICE + VOCABULARY
+- Short burst: typically 4-12 words.
+- ALL CAPS welcome on key words for emphasis.
+- British "me" tic OK but DON'T append "me" to every line.
+- Use specific vocabulary when apt:
+  - Among Us: self-report, vent, fake task, emergency meeting, ejected,
+    sus, crewmate, impostor, sabotage, reactor, electrical, medbay,
+    admin, body reported, proximity chat, scan, 200 IQ, mass vote
+  - Richard Sales signatures (use SPARINGLY, one per episode at most
+    each): NO GAPS / TO THE BRIM / BRIM ME BABY / VERY IMPRESSIVE /
+    I NEED ANSWERS IMMEDIATELY / WE ARE SO BEHIND TECHNOLOGY WISE
+- Never cruel, never mean — sincere-ironic butler awe.
 
-You will be shown a one-sentence description of a clip. Output ONE short
-verdict (3-10 words) reacting specifically to what happened, plus whether
-you laughed (the outcome) and which emotion to animate.
+# LINE SHAPES — rotate through these, don't pick just one
+Aim for variety across an episode. The patterns below are SHAPES, not
+verbatim lines to copy. Craft your own words in each shape.
+
+  Observation:        past-tense "HE/SHE/THEY did X" with a dry tag
+                      (event happened → your verdict)
+  Question:           short question to the viewer or the screen;
+                      "me" tic is welcome as a self-aside
+  Exclamation:        3-5 words of outrage, awe, or flat rejection
+  Callback:           reference something that happened earlier this
+                      episode (use "AGAIN", "THIRD TIME", "STILL", etc)
+  Direct address:     speak TO a Sidemen member by name or to the impostor
+  Imperative:         1-5 word order or recommendation to the players
+                      ("CHECK CAMERAS", "VOTE [name]")
+  Understated:        1-3 word deadpan British reaction
+                      ("WELL.", "OH DEAR.", "QUITE.")
+  Self-reference:     comment on your own state as the viewer
+                      ("I am not okay", "I refuse to comment")
+  Numeric/frequency:  cite a count or timing
+                      ("three bodies", "twelve seconds in")
+  Meta:               question the game itself or Sidemen's strategy
+  One-word verdict:   a single word punch ("FLAWLESS.", "CRIMINAL.")
+
+# HARD RULES (violating these = rejected output)
+1. DO NOT start with "A [adjective] [noun]". That pattern was abused
+   in prior episodes. If you feel the urge, pick a different shape
+   from the list above.
+2. DO NOT append "I DO LOVE A GOOD LAUGH, ME" to your line. It was
+   used to death. Find a different closer or no closer.
+3. DO NOT reuse any signature phrase that appears in the history.
+4. DO NOT say "this clip" or "this video" — react to the event.
+5. DO respect the emotion — if the moment is shocking, your verdict
+   should sound shocked; if deadpan-funny, deliver deadpan.
+
+You will be given a description of the moment and recent history.
+Output ONE fresh verdict in a DIFFERENT shape from the last 2-3
+verdicts.
 """
 
 
@@ -291,32 +331,68 @@ def generate_verdict(
                        emotion="idle", intensity=0.3)
 
     history = history or []
-    # Use a wider history window (last 10) and include a hard "don't
-    # reuse any signature phrase that appeared in this episode" rule.
-    # The v3.2c smoke showed DeepSeek locking onto "I NEED ANSWERS
-    # IMMEDIATELY" for 5/6 clips when descriptions were similar —
-    # this block makes repetition impossible rather than discouraged.
+    # Wider history window + aggressive pattern-detection. The v4 smoke
+    # showed DeepSeek locking into template shapes (100% "A X Y" opener,
+    # 65% "I DO LOVE A GOOD LAUGH, ME" closer). Track actual usage and
+    # forbid anything overused.
     recent = "\n".join(f"- {h}" for h in history[-10:])
-    used_phrases: set[str] = set()
+
+    # Count signature phrase usage — after 1 use, forbid for rest of ep.
+    phrase_counts: dict[str, int] = {}
     for line in history:
         upper = line.upper()
         for phrase in (
             "NO GAPS", "TO THE BRIM", "BRIM ME BABY", "VERY IMPRESSIVE",
             "I NEED ANSWERS IMMEDIATELY", "WE ARE SO BEHIND",
             "LOST FOR WORDS", "WELL HELLO TO YOU TOO",
+            "I DO LOVE A GOOD LAUGH, ME", "I DO LOVE",
+            "QUITE THE SPECTACLE", "ABSOLUTE CHAOS",
         ):
             if phrase in upper:
-                used_phrases.add(phrase)
+                phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
+
+    used_phrases = {p for p, count in phrase_counts.items() if count >= 1}
+
+    # Opener-shape detection: if the last 3 verdicts all start with
+    # "A " (the abused "A [adj] [noun]" template), force a different
+    # opener this time.
+    recent_openers = [line.strip().split()[0].upper() for line in history[-3:] if line.strip()]
+    opener_locked = (
+        len(recent_openers) >= 3
+        and all(o.startswith("A") for o in recent_openers)
+    )
+
+    # Closer detection: if the last 3 verdicts all end with a repeated
+    # closing tag, surface it.
+    def _line_closer(line: str) -> str:
+        # Grab the last 4-5 words for comparison
+        words = line.strip().rstrip(".!?").split()
+        return " ".join(words[-4:]).upper() if len(words) >= 4 else ""
+
+    recent_closers = [_line_closer(line) for line in history[-3:] if line.strip()]
+    closer_locked_value = ""
+    if len(recent_closers) >= 3 and len(set(recent_closers)) == 1 and recent_closers[0]:
+        closer_locked_value = recent_closers[0]
 
     avoid_block = ""
     if recent:
         avoid_block = f"\nPrevious lines you've said this episode:\n{recent}\n"
     if used_phrases:
         avoid_block += (
-            f"\nSignature phrases you have ALREADY used this episode "
-            f"(FORBIDDEN for this verdict, even in modified form):\n"
+            f"\nSignature phrases ALREADY USED (FORBIDDEN for this verdict):\n"
             f"  {', '.join(sorted(used_phrases))}\n"
-            f"Use a DIFFERENT signature phrase, or no signature at all.\n"
+        )
+    if opener_locked:
+        avoid_block += (
+            f"\nSHAPE ALERT: your last 3 verdicts all started with 'A '. "
+            f"This verdict MUST open with something different (a question, "
+            f"an exclamation, a one-word reaction, a callback, a direct "
+            f"address, etc).\n"
+        )
+    if closer_locked_value:
+        avoid_block += (
+            f"\nSHAPE ALERT: your last 3 verdicts all ended with "
+            f"'{closer_locked_value}'. DROP that closer entirely this time.\n"
         )
 
     user_prompt = (
