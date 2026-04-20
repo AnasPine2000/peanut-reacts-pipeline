@@ -239,10 +239,21 @@ def _render_clip_with_peanut(
     score_safe = score_text.replace(":", r"\:").replace("'", r"\'")
 
     if verdict_tts and verdict_tts.exists():
+        # KSI-style reaction punch-in: Peanut PIP is small during the clip,
+        # then jumps to ~40% bigger at verdict_start for emphasis. Two
+        # chromakeyed copies of the facecam (small + big) gated by
+        # enable='lt(t,VERDICT_START)' / 'gte(...)' so exactly one is
+        # visible at any moment.
+        big_size = int(facecam_size * 1.4)   # 360 -> 504
+        big_margin = max(20, margin - 10)    # slightly tighter margin when big
         filter_complex = (
-            f"[1:v]chromakey=0x00FF00:0.15:0.08,"
-            f"scale={facecam_size}:{facecam_size}[fc];"
-            f"[0:v][fc]overlay=W-w-{margin}:H-h-{margin},"
+            f"[1:v]chromakey=0x00FF00:0.15:0.08,split=2[fcA][fcB];"
+            f"[fcA]scale={facecam_size}:{facecam_size}[fc_small];"
+            f"[fcB]scale={big_size}:{big_size}[fc_big];"
+            f"[0:v][fc_small]overlay=W-w-{margin}:H-h-{margin}:"
+            f"enable='lt(t,{verdict_start:.3f})'[v1];"
+            f"[v1][fc_big]overlay=W-w-{big_margin}:H-h-{big_margin}:"
+            f"enable='gte(t,{verdict_start:.3f})',"
             f"drawtext=text='{score_safe}':fontcolor=yellow:fontsize=36:"
             f"box=1:boxcolor=black@0.6:boxborderw=8:x=20:y=20[video_out];"
             f"[0:a]volume=0.55[src_audio];"
@@ -452,10 +463,15 @@ def build_tntl_episode(
 
     # ── Each clip: source + Peanut PIP + verdict TTS near end ──
     for i, (clip, outcome) in enumerate(zip(clips, outcomes)):
+        # Retrospective score display (not a spoiler): current score +
+        # cracks-so-far. Previous version showed the upcoming delta
+        # "(+100 / -200)" which was forward-looking and spoiled each clip's
+        # outcome before it landed. Now we show what has happened up to
+        # this clip — which tracks with the "CRACK BAR" mental model.
         score_before = outcomes[i - 1]["score_after"] if i > 0 else 1000
-        delta = "+100" if outcome["survives"] else "-200"
+        cracks_so_far = sum(1 for o in outcomes[:i] if not o["survives"])
         score_text = (
-            f"CLIP {i + 1}/{len(clips)} | SCORE {score_before} ({delta})"
+            f"CLIP {i + 1}/{len(clips)} | SHELL {cracks_so_far} CRACKS | {score_before}"
         )
 
         reaction_tts = tts_dir / f"reaction_{i:02d}.mp3"
@@ -513,10 +529,26 @@ def build_tntl_episode(
         norm = normalized_dir / f"norm_{idx:03d}.mp4"
         if not norm.exists():
             try:
+                # Blur-pillarbox fill: portrait source clips (phone footage,
+                # vertical TikToks) would otherwise leave ugly black bars on
+                # the sides after pad=1920:1080. Instead: duplicate the
+                # source, scale one copy to cover 1920x1080 and blur it as
+                # the background, then overlay the original (aspect-correct
+                # scaled) on top. This is the "iPhone wallpaper" look that
+                # makes portrait content feel intentional instead of
+                # letterboxed.
+                filter_complex = (
+                    "[0:v]split=2[bg][fg];"
+                    "[bg]scale=1920:1080:force_original_aspect_ratio=increase,"
+                    "crop=1920:1080,gblur=sigma=30,setsar=1:1,fps=30[bgblur];"
+                    "[fg]scale=1920:1080:force_original_aspect_ratio=decrease,"
+                    "setsar=1:1,fps=30[fgfit];"
+                    "[bgblur][fgfit]overlay=(W-w)/2:(H-h)/2[vout]"
+                )
                 subprocess.run([
                     "ffmpeg", "-y", "-i", str(seg),
-                    "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,"
-                           "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1:1,fps=30",
+                    "-filter_complex", filter_complex,
+                    "-map", "[vout]", "-map", "0:a?",
                     "-af", "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
                     "-c:a", "aac", "-b:a", "192k",
