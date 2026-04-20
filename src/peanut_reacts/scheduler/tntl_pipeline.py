@@ -323,35 +323,83 @@ def build_tntl_episode(
       - Rules intro (short: "I laugh, shell cracks. Let's get into it.")
       - N × (clip with Peanut PIP in corner + verdict TTS in last ~2s of clip)
       - Outro with final score + CTA
+
+    v3.2: verdicts are now context-aware. For each clip we:
+      1. Describe it via Groq Llama 3.2 Vision (or fallback if no key)
+      2. Generate a verdict via DeepSeek using the Peanut persona + history
+      3. Synthesize the verdict via ElevenLabs (British "George" voice) with
+         fallback to Edge TTS if ElevenLabs fails.
     """
     from peanut_reacts.character.tts import EdgeTTSEngine, TTSConfig
+    from peanut_reacts.character.clip_context import describe_clip, generate_verdict
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    tts = EdgeTTSEngine(TTSConfig(voice=voice, rate=rate))
+    edge_tts = EdgeTTSEngine(TTSConfig(voice=voice, rate=rate))
     clips_dir = PROJECT_ROOT / "data" / "ai_peanut_clips"
 
-    # Determine outcomes for each clip (some survive, most fail)
-    outcomes = []
+    # ── ElevenLabs verdict TTS (with Edge TTS fallback) ────────────────────
+    # "George" (JBFqnCBsd6RMkjVDRZzb) is a warm British narrator voice —
+    # matches our Richard-Sales-inspired calm Victorian butler Peanut.
+    def _synthesize_verdict(text: str, out_path: Path, emotion: str) -> None:
+        """Try ElevenLabs first, fall back to Edge TTS on any failure."""
+        try:
+            from peanut_reacts.character.elevenlabs_tts import (
+                ElevenLabsTTSEngine, ElevenLabsConfig,
+            )
+            if not os.environ.get("ELEVENLABS_API_KEY"):
+                raise RuntimeError("ELEVENLABS_API_KEY missing")
+            engine = ElevenLabsTTSEngine(ElevenLabsConfig(
+                voice_id="JBFqnCBsd6RMkjVDRZzb",  # British "George"
+                model_id="eleven_multilingual_v2",
+            ))
+            # Map our emotion names to the subset elevenlabs_tts knows
+            el_emotion = {
+                "laughing": "amused", "facepalm": "sarcastic",
+                "scared": "shocked", "celebrating": "excited",
+                "idle": "neutral",
+            }.get(emotion, emotion if emotion in {
+                "excited","shocked","amused","sarcastic","confused","neutral"
+            } else "neutral")
+            engine.synthesize(text, out_path, emotion=el_emotion)
+            return
+        except Exception as e:
+            log.warning("[TNTL] ElevenLabs failed (%s); falling back to Edge TTS",
+                        str(e)[:120])
+        asyncio.run(edge_tts.synthesize(text, out_path))
+
+    import os  # local import for env checks
+
+    # ── Determine outcomes PER CLIP via context-aware LLM verdict ──────────
+    # Replaces the old random 35/65 split + static line arrays. For each
+    # clip we describe -> verdict. History ensures DeepSeek doesn't repeat
+    # lines across the episode.
+    outcomes: list[dict] = []
+    descriptions: list[str] = []
+    history: list[str] = []
     score = 1000
     streak = 0
-    for i in range(len(clips)):
-        # 35% chance of surviving, 65% chance of laughing
-        survives = random.random() < 0.35
+
+    log.info("[TNTL] Generating context-aware verdicts for %d clips...", len(clips))
+    for i, clip in enumerate(clips):
+        description = describe_clip(clip)
+        descriptions.append(description)
+        verdict = generate_verdict(description, history=history)
+        history.append(verdict.text)
+
+        survives = verdict.outcome == "survive"
         if survives:
             streak += 1
             score += 100
-            line = random.choice(PEANUT_SURVIVE_LINES)
-            emotion = "sarcastic"
         else:
             score -= 200
             streak = 0
-            line = random.choice(PEANUT_FAIL_LINES)
-            emotion = "laughing"
 
         outcomes.append({
             "survives": survives,
-            "line": line,
-            "emotion": emotion,
+            "line": verdict.text,
+            "emotion": verdict.emotion,
+            "intensity": verdict.intensity,
+            "description": description,
             "score_after": score,
             "streak": streak,
         })
@@ -362,25 +410,24 @@ def build_tntl_episode(
     tts_dir.mkdir(exist_ok=True)
 
     # Intro TTS — Richard-voiced Peanut: calm gravitas, short bursts, "me" tic.
-    # Defer sub/bell ask to outro per KSI+ pattern.
+    # Defer sub/bell ask to outro per KSI+ pattern. Uses ElevenLabs voice.
     intro_text = (
         f"Right. Try Not To Laugh. {len(clips)} clips. "
         f"One rule: I laugh, the shell cracks. Let's get into it, me."
     )
     intro_tts = tts_dir / "intro.mp3"
     if not intro_tts.exists():
-        asyncio.run(tts.synthesize(intro_text, intro_tts))
+        _synthesize_verdict(intro_text, intro_tts, emotion="neutral")
 
-    # Generate TTS for each reaction. Richard grammar: short burst, no
-    # score number spoken (score is shown on-screen as text overlay).
-    # Struggle preamble only ~25% of the time to keep verdicts tight.
+    # Generate TTS for each verdict via ElevenLabs (with Edge TTS fallback).
+    # The verdict line is already LLM-generated and context-aware — no more
+    # random struggle preamble (that was a hack to add variety when lines
+    # were static; now each line is fresh).
     for i, outcome in enumerate(outcomes):
         reaction_tts = tts_dir / f"reaction_{i:02d}.mp3"
         if not reaction_tts.exists():
-            text = outcome["line"]
-            if not outcome["survives"] and random.random() < 0.25:
-                text = random.choice(PEANUT_STRUGGLE_LINES) + " " + text
-            asyncio.run(tts.synthesize(text, reaction_tts))
+            _synthesize_verdict(outcome["line"], reaction_tts,
+                                emotion=outcome["emotion"])
 
     # Outro TTS — Richard grammar: short, dry, understated. "crack the sub" is
     # the Peanut-specific CTA twist on KSI+'s "smash the sub".
@@ -398,7 +445,8 @@ def build_tntl_episode(
 
     outro_tts = tts_dir / "outro.mp3"
     if not outro_tts.exists():
-        asyncio.run(tts.synthesize(outro_text, outro_tts))
+        _synthesize_verdict(outro_text, outro_tts,
+                            emotion="sarcastic" if final_score > 500 else "amused")
 
     # ─── Build final video ───
     # Structure: [cold-open hook] → [rules intro] → N × [clip+PIP+verdict]
@@ -423,7 +471,7 @@ def build_tntl_episode(
     hook_tease_tts = tts_dir / "hook_tease.mp3"
     hook_tease_text = f"You will not make it past clip {hook_clip_idx + 1}. Trust me, me."
     if not hook_tease_tts.exists():
-        asyncio.run(tts.synthesize(hook_tease_text, hook_tease_tts))
+        _synthesize_verdict(hook_tease_text, hook_tease_tts, emotion="amused")
 
     # Trim hook source to last 6s (the payoff beat)
     hook_trimmed = output_dir / "_hook_trim.mp4"

@@ -118,8 +118,10 @@ class ElevenLabsTTSEngine:
                 sped_path.replace(output_path)
                 duration = duration / speed
 
+            # ASCII-only log message — Windows cp1252 console can't encode
+            # the unicode arrow "->" character, which crashes the logger.
             self._log.info(
-                "ElevenLabs [%s] '%s' → %.2fs (%d chars)",
+                "ElevenLabs [%s] '%s' -> %.2fs (%d chars)",
                 emotion, text[:40], duration, len(text),
             )
 
