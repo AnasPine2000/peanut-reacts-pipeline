@@ -94,9 +94,27 @@ class YouTubeUploader:
         url = f"https://www.youtube.com/watch?v={video_id}"
         logger.info("Upload complete! %s", url)
 
-        # Upload thumbnail if provided
+        # Upload thumbnail if provided. Thumbnail set can fail on channels
+        # that are not yet phone-verified (403 forbidden) — log the warning
+        # and keep going. The video itself is already live, and losing a
+        # custom thumbnail should not invalidate a successful upload.
         if metadata.thumbnail_path and metadata.thumbnail_path.exists():
-            self.set_thumbnail(video_id, metadata.thumbnail_path)
+            try:
+                self.set_thumbnail(video_id, metadata.thumbnail_path)
+            except HttpError as e:
+                status = getattr(getattr(e, "resp", None), "status", None)
+                if status == 403:
+                    logger.warning(
+                        "Custom thumbnail rejected (403). The channel may not "
+                        "be phone-verified at youtube.com/verify. Video "
+                        "uploaded fine with default auto-thumbnail: %s", url,
+                    )
+                else:
+                    logger.warning("Thumbnail set failed (%s), video still OK: %s",
+                                   status, url)
+            except Exception as e:
+                logger.warning("Thumbnail set raised %s, video still OK: %s",
+                               type(e).__name__, url)
 
         return UploadResult(video_id=video_id, url=url)
 
