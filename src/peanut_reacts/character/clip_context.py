@@ -34,7 +34,114 @@ import httpx
 log = logging.getLogger(__name__)
 
 
-# ── Vision: Groq Llama 3.2 Vision ──────────────────────────────────────────
+# ── Vision backend selection ───────────────────────────────────────────────
+#
+# Priority order:
+#   1. Local Ollama (Qwen3-VL-8B / MiniCPM-V 4.5 etc.) when reachable.
+#      Apache-2.0, no quota, ~3s per 3-frame call on an RTX 4070 with a Q4
+#      GGUF. Set OLLAMA_VISION_MODEL="qwen3-vl:8b" after `ollama pull`.
+#   2. Groq Llama-4 Scout/Maverick when Ollama is unreachable or returns
+#      an error. Free tier is rate-limited; keep throttled.
+#
+# Env vars:
+#   OLLAMA_URL           default http://localhost:11434
+#   OLLAMA_VISION_MODEL  e.g. "qwen3-vl:8b" — empty disables Ollama
+#   GROQ_API_KEY         for the fallback
+#
+# The priority order + fallback chain is logged at INFO so you can see
+# which backend served each clip description.
+
+
+# ── Vision: local Ollama (Qwen3-VL etc.) ───────────────────────────────────
+
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
+OLLAMA_VISION_MODEL = os.environ.get("OLLAMA_VISION_MODEL", "").strip()
+OLLAMA_CHAT_ENDPOINT = f"{OLLAMA_URL}/v1/chat/completions"
+OLLAMA_VERSION_ENDPOINT = f"{OLLAMA_URL}/api/version"
+
+# Ollama reachability cache — we don't ping before every clip (75-clip
+# bursts would add 75 extra round-trips). Re-check every 60 s, or
+# immediately after a failed call (marked via _ollama_reachable_invalidate).
+_OLLAMA_REACHABLE: Optional[bool] = None
+_OLLAMA_CHECK_TS: float = 0.0
+_OLLAMA_CHECK_INTERVAL_S = 60.0
+
+
+def _ollama_reachable() -> bool:
+    """Cache-backed health check against Ollama's /api/version endpoint."""
+    import time as _time
+    global _OLLAMA_REACHABLE, _OLLAMA_CHECK_TS
+    if not OLLAMA_VISION_MODEL:
+        return False
+    now = _time.time()
+    if (
+        _OLLAMA_REACHABLE is not None
+        and (now - _OLLAMA_CHECK_TS) < _OLLAMA_CHECK_INTERVAL_S
+    ):
+        return _OLLAMA_REACHABLE
+    try:
+        resp = httpx.get(OLLAMA_VERSION_ENDPOINT, timeout=2.0)
+        _OLLAMA_REACHABLE = resp.status_code == 200
+        if _OLLAMA_REACHABLE:
+            log.info("[CTX] Ollama reachable at %s (model=%s)",
+                     OLLAMA_URL, OLLAMA_VISION_MODEL)
+        else:
+            log.warning("[CTX] Ollama unreachable: HTTP %d", resp.status_code)
+    except Exception as e:
+        log.info("[CTX] Ollama not reachable (%s) — falling back to Groq",
+                 type(e).__name__)
+        _OLLAMA_REACHABLE = False
+    _OLLAMA_CHECK_TS = now
+    return _OLLAMA_REACHABLE
+
+
+def _ollama_reachable_invalidate() -> None:
+    """Force the next _ollama_reachable() to re-check (after a failed call)."""
+    global _OLLAMA_REACHABLE, _OLLAMA_CHECK_TS
+    _OLLAMA_REACHABLE = None
+    _OLLAMA_CHECK_TS = 0.0
+
+
+def _describe_via_ollama(content: list[dict]) -> Optional[str]:
+    """Try Ollama's OpenAI-compatible chat endpoint. Return None on any failure.
+
+    Uses the same message payload as Groq (text + image_url data URLs).
+    First call after a cold start may take 10-20 s while the model loads;
+    subsequent calls are 2-4 s on a 4070.
+    """
+    if not OLLAMA_VISION_MODEL:
+        return None
+    if not _ollama_reachable():
+        return None
+    try:
+        resp = httpx.post(
+            OLLAMA_CHAT_ENDPOINT,
+            headers={"Content-Type": "application/json"},
+            json={
+                "model": OLLAMA_VISION_MODEL,
+                "messages": [{"role": "user", "content": content}],
+                "temperature": 0.3,
+                "max_tokens": 120,
+            },
+            timeout=90,    # first load can be slow; steady-state much faster
+        )
+        if resp.status_code != 200:
+            log.warning("[CTX] Ollama returned %d: %s",
+                        resp.status_code, resp.text[:200])
+            _ollama_reachable_invalidate()
+            return None
+        desc = resp.json()["choices"][0]["message"]["content"].strip()
+        desc = desc.strip('"\'')
+        log.info("[CTX] Clip described (ollama/%s): %s",
+                 OLLAMA_VISION_MODEL, desc[:100])
+        return desc
+    except Exception as e:
+        log.warning("[CTX] Ollama describe failed: %s", str(e)[:200])
+        _ollama_reachable_invalidate()
+        return None
+
+
+# ── Vision: Groq Llama 3.2 Vision (fallback) ───────────────────────────────
 
 GROQ_VISION_URL = "https://api.groq.com/openai/v1/chat/completions"
 # 2026 current Groq vision models. Maverick is Scout's larger sibling —
@@ -97,16 +204,15 @@ def _probe_duration(clip_path: Path) -> float:
 
 
 def describe_clip(clip_path: Path, num_frames: int = 3) -> str:
-    """Return a short description of what's in the clip, via Groq vision.
+    """Return a short description of what's in the clip.
 
-    Falls back to a generic description if the API is unreachable — the
-    downstream LLM still gets *something* to work with.
+    Routing order:
+      1. Local Ollama (Qwen3-VL etc.) if OLLAMA_VISION_MODEL is set and
+         the server is reachable. Free, unlimited, ~3s per call.
+      2. Groq Llama-4 Scout/Maverick as fallback. Rate-limited free tier.
+      3. Generic fallback description if both fail — the downstream LLM
+         still gets something to work with.
     """
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
-        log.warning("No GROQ_API_KEY; skipping vision description")
-        return "A funny clip (no vision API available)"
-
     duration = _probe_duration(clip_path)
     if duration < 1.0:
         return "A very short clip"
@@ -122,7 +228,8 @@ def describe_clip(clip_path: Path, num_frames: int = 3) -> str:
     if not frames:
         return "A clip we couldn't see"
 
-    # Build multi-image message
+    # Build multi-image message — identical format for Ollama and Groq
+    # (both expose an OpenAI-compatible chat endpoint)
     content = [
         {"type": "text", "text":
          "These are 3 frames from a short funny video clip (in time order). "
@@ -136,6 +243,17 @@ def describe_clip(clip_path: Path, num_frames: int = 3) -> str:
             "type": "image_url",
             "image_url": {"url": b64},
         })
+
+    # Tier 1: local Ollama
+    ollama_desc = _describe_via_ollama(content)
+    if ollama_desc:
+        return ollama_desc
+
+    # Tier 2: Groq fallback
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        log.warning("No GROQ_API_KEY and Ollama unreachable; returning generic desc")
+        return "A funny clip (no vision API available)"
 
     import time as _time
 
