@@ -300,7 +300,18 @@ def generate_segment_metadata(segment: dict, source_title: str, llm_provider) ->
 
 
 def cut_segment(video_path: str, segment: dict, output_dir: Path) -> Optional[Path]:
-    """Cut a segment from the source video."""
+    """Cut a segment from the source video.
+
+    Tries NVENC re-encode first (YouTube prefers uniformly-encoded mp4s),
+    and falls back to stream-copy if the re-encode times out. Stream-copy
+    gives keyframe-aligned boundaries which can be off by up to ~10 s, but
+    it's instant and never fails on problematic source files.
+
+    The April 21 "Trump Is In Trouble" stream showed exactly this failure
+    mode: segments 0-5 re-encoded cleanly, seg 6 hit 1200 s timeout — the
+    source's keyframe structure around the 100-min mark made NVENC seek
+    pathologically slow. Stream-copy solves it.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     safe_topic = re.sub(r'[^\w\s-]', '', segment.get("topic", "clip"))[:30].strip().replace(" ", "_")
     clip_path = output_dir / f"seg_{segment['index']:02d}_{safe_topic}.mp4"
@@ -312,6 +323,9 @@ def cut_segment(video_path: str, segment: dict, output_dir: Path) -> Optional[Pa
     encoder = "h264_nvenc" if _nvenc_available() else "libx264"
     preset = "fast" if encoder == "h264_nvenc" else "veryfast"
 
+    # Attempt 1: NVENC re-encode (preferred — clean mp4, precise cuts)
+    # Bumped timeout to 1800 s (30 min) since some 30-min chunks can take
+    # up to 8-10 min on a loaded GPU. Anything longer we bail to fallback.
     try:
         subprocess.run([
             "ffmpeg", "-y",
@@ -322,11 +336,56 @@ def cut_segment(video_path: str, segment: dict, output_dir: Path) -> Optional[Pa
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             str(clip_path),
-        ], check=True, capture_output=True, timeout=1200)
+        ], check=True, capture_output=True, timeout=1800)
         log.info("Cut: %s (%.0f min)", clip_path.name, segment["duration"] / 60)
         return clip_path
+    except subprocess.TimeoutExpired:
+        log.warning(
+            "Cut NVENC timed out on %s (30 min), falling back to stream-copy",
+            clip_path.name,
+        )
+        # Clean up the half-written output so the stream-copy starts fresh
+        try:
+            clip_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    except subprocess.CalledProcessError as e:
+        log.warning(
+            "Cut NVENC failed on %s (%s), falling back to stream-copy",
+            clip_path.name,
+            (e.stderr or b"").decode("utf-8", errors="replace")[-200:],
+        )
+        try:
+            clip_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     except Exception as e:
-        log.error("Cut failed: %s", e)
+        log.error("Cut NVENC crashed: %s — falling back to stream-copy", e)
+        try:
+            clip_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    # Attempt 2: stream-copy. Keyframe-aligned, but instant and robust.
+    try:
+        duration = segment["end"] - segment["start"]
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-ss", str(segment["start"]),
+            "-i", str(video_path),
+            "-t", str(duration),
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
+            "-movflags", "+faststart",
+            str(clip_path),
+        ], check=True, capture_output=True, timeout=300)
+        log.info(
+            "Cut (stream-copy fallback): %s (%.0f min)",
+            clip_path.name, duration / 60,
+        )
+        return clip_path
+    except Exception as e:
+        log.error("Cut stream-copy also failed: %s", e)
         return None
 
 
