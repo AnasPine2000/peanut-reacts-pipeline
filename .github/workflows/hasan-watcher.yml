@@ -1,0 +1,72 @@
+name: hasan-stream-watcher
+
+# Poll the HasanAbi Archive source channel every 30 minutes. When a new
+# stream lands, commit an entry to data/hasan_trigger_queue.json so the
+# local processor picks it up on its next run.
+#
+# Runs on free GitHub-hosted runners — no infra to own, no polling from
+# the user's home machine required. If the residential PC is off for a
+# day, the queue still grows here; once the PC comes back online, the
+# local processor drains the queue in order.
+
+on:
+  schedule:
+    # Every 30 min. GitHub Actions cron has a minimum effective interval
+    # of ~5 min, but streams drop once per day so 30 min is plenty fast.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:    # allow manual "poll now" button in Actions UI
+
+# Only one watcher at a time — otherwise two parallel runs could race on
+# the state file and both try to commit.
+concurrency:
+  group: hasan-watcher
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    # needed to commit state/queue back to master
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # We need the history so we can commit on top of master
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install yt-dlp
+        run: pip install --quiet yt-dlp
+
+      - name: Poll source channel
+        id: poll
+        run: |
+          python scripts/watch_hasan_source.py
+          # The script emits ::set-output if new streams were found.
+          # Capture its exit so we can fail the job on fetch error but
+          # not on "no new streams" (both are code 0 in that script).
+
+      - name: Commit + push any new queue entries
+        run: |
+          git config user.name  "hasan-watcher-bot"
+          git config user.email "hasan-watcher@users.noreply.github.com"
+
+          git add data/hasan_watcher_state.json data/hasan_trigger_queue.json
+
+          # --quiet so a no-op "nothing to commit" doesn't fail the step;
+          # we only push when there's an actual delta.
+          if git diff --cached --quiet; then
+            echo "No changes to commit — no new streams detected."
+          else
+            # Pull the new_streams summary from the script's stderr if set
+            NEW_COUNT=$(grep -oP 'new_streams::\K[0-9]+' <<<"${{ steps.poll.outputs.new_streams }}" || echo "?")
+            MSG="hasan-watcher: ${NEW_COUNT} new stream(s) detected"
+            git commit -m "$MSG"
+            git push
+            echo "Committed: $MSG"
+          fi
