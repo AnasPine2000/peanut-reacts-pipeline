@@ -1,12 +1,13 @@
 {
   "seen_ids": [
-    "89o_6_CVfR8",
-    "hu0ZdlU3768",
-    "NOzgv5ShUP0",
+    "aM0vZKaMtuA",
     "5tRXrwTAORI",
-    "aM0vZKaMtuA"
+    "NOzgv5ShUP0",
+    "hu0ZdlU3768",
+    "RYLcj3KccLE",
+    "89o_6_CVfR8"
   ],
-  "last_poll_at": "2026-04-22T03:17:57.387955+00:00",
-  "total_polls": 15,
-  "total_new_detected": 5
+  "last_poll_at": "2026-04-22T05:37:31.131511+00:00",
+  "total_polls": 16,
+  "total_new_detected": 6
 }
