@@ -10,11 +10,18 @@ name: hasan-stream-watcher
 # local processor drains the queue in order.
 
 on:
-  schedule:
-    # Every 30 min. GitHub Actions cron has a minimum effective interval
-    # of ~5 min, but streams drop once per day so 30 min is plenty fast.
-    - cron: "*/30 * * * *"
-  workflow_dispatch:    # allow manual "poll now" button in Actions UI
+  # DISABLED 2026-04-23: the downstream pipeline was auto-producing
+  # content that YouTube hard-deletes (5/5 April 21 uploads flagged
+  # as ContentID matches). We don't want the watcher to keep growing
+  # the queue while the pipeline is broken — every entry drained would
+  # be another deletion.
+  #
+  # When the Hasan pipeline is redesigned to produce clickbait-short
+  # clips instead of raw segments, uncomment the schedule below.
+  #
+  # schedule:
+  #   - cron: "*/30 * * * *"
+  workflow_dispatch:    # keep manual "poll now" button for future re-enable
 
 # Only one watcher at a time — otherwise two parallel runs could race on
 # the state file and both try to commit.

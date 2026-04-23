@@ -65,13 +65,23 @@ channels:
       You are Chilli, a hot pepper character with spicy opinions.
       You react to political commentary and drama with sharp, witty takes.
       Keep it punchy. Drop hot takes. Be opinionated but fair.
-    schedule: "0 10 * * *"
+    # DISABLED 2026-04-23: raw full-length archive chunks trigger
+    # YouTube ContentID auto-deletion (5 of 5 April 21 uploads were
+    # hard-deleted within hours). Channel must be redesigned around
+    # short clickbait clips (survived April 16 Yale Debate pattern)
+    # before re-enabling. Keep config for reference.
+    enabled: false
+    # schedule commented out so the APScheduler engine skips it; queue
+    # processor also checks this flag before firing.
+    # schedule: "0 10 * * *"
     segment_by_topic: true
     min_segment_minutes: 10
     max_segment_minutes: 60
     oauth_token: "~/.peanut_reacts/hasanabi_token.json"
     client_secrets: "~/.peanut_reacts/client_secret.json"
-    upload_privacy: public
+    # Belt-and-suspenders: if something fires the pipeline by mistake,
+    # uploads go unlisted (invisible, no ContentID strike, easy cleanup).
+    upload_privacy: unlisted
     max_segments_per_run: 10
     tags: ["hasanabi", "hasan", "politics", "twitch", "reaction", "clips", "debate"]
 
