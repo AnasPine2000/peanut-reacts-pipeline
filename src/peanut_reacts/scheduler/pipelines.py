@@ -246,6 +246,46 @@ def run_reaction_pipeline(
                         db.complete_job(job_id, str(final_path), result.url)
                         log.info("[%s] Uploaded: %s — title: %s", channel.id, result.url, title[:80])
 
+                        # TikTok cross-post (opt-in via channel.tiktok_cookies).
+                        # Runs AFTER YouTube so a flaky TikTok session never
+                        # blocks the primary upload. Failure logged, never raised.
+                        if channel.tiktok_cookies:
+                            tiktok_path = Path(channel.tiktok_cookies).expanduser()
+                            if not tiktok_path.exists():
+                                log.warning(
+                                    "[%s] TikTok cookies configured but file missing: %s",
+                                    channel.id, tiktok_path,
+                                )
+                            else:
+                                try:
+                                    from peanut_reacts.upload.tiktok_upload import (
+                                        TikTokMetadata, TikTokUploader,
+                                    )
+                                    # TikTok caption: keep SHORT. First line hooks or they scroll.
+                                    tt_caption = f"{channel.character.title()} reacts to {vid_title[:80]}"
+                                    tt_hashtags = (channel.tags or [])[:5] + [
+                                        channel.character.lower(), "fyp", "reaction",
+                                    ]
+                                    tt_meta = TikTokMetadata(
+                                        caption=tt_caption,
+                                        hashtags=tt_hashtags,
+                                        privacy="public",
+                                    )
+                                    log.info("[%s] Cross-posting to TikTok...", channel.id)
+                                    tt_res = TikTokUploader(cookies_path=tiktok_path).upload(
+                                        final_path, tt_meta,
+                                    )
+                                    if tt_res.success:
+                                        log.info("[%s] TikTok upload OK", channel.id)
+                                    else:
+                                        log.warning(
+                                            "[%s] TikTok failed (non-fatal): %s",
+                                            channel.id, tt_res.error,
+                                        )
+                                except Exception as e:
+                                    log.warning("[%s] TikTok crashed (non-fatal): %s",
+                                                channel.id, e)
+
                         # Record the experiment
                         if applied_recs:
                             try:

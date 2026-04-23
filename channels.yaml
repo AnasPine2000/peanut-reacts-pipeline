@@ -156,6 +156,11 @@ channels:
     stories_per_video: 3
     oauth_token: "~/.peanut_reacts/tokens/stories.json"
     upload_privacy: public
+    # TikTok cross-post: inherited TikTok wiring from run_reddit_pipeline
+    # (same underlying pipeline as reddit_stories channel). The Actions
+    # runner writes the cookie file at tiktok_peanut_stories.json; the
+    # VPS needs the real cookie JSON scp'd to this path.
+    tiktok_cookies: "~/.peanut_reacts/tiktok_peanut_stories.json"
     tags: ["reddit", "stories", "aita", "tifu", "narration"]
 
   # ── Channel 5: Peanut Try Not To Laugh ──────────────────────
@@ -251,6 +256,10 @@ channels:
     oauth_token: "~/.peanut_reacts/peanut_tiktok_reacts_token.json"
     client_secrets: "~/.peanut_reacts/client_secret.json"
     upload_privacy: public
+    # TikTok cross-post via run_reaction_pipeline (see pipelines.py).
+    # A Peanut-reacts-to-viral-TikTok video is the NATURAL fit for
+    # reposting to TikTok, so prioritize refreshing cookies here.
+    tiktok_cookies: "~/.peanut_reacts/tiktok_peanut_tiktok_reacts.json"
     tags: ["peanut reacts", "tiktok", "viral", "reaction", "funny", "shorts", "trending"]
 
 # ── Global Settings ────────────────────────────────────────────
