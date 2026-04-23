@@ -582,11 +582,14 @@ def run_reddit_pipeline(
         result["errors"].append("Composite failed")
         return result
 
-    # Step 6b: Polish layer (intro + outro). Failure here falls back to
-    # the unpolished video so the pipeline always has an output. Adds
-    # ~20-30 s on a CPU runner (one re-encode concatenating 3 clips).
+    # Step 6b: Polish layer (SFX + intro + outro). Failure here falls
+    # back to the unpolished video so the pipeline always has an
+    # output. Adds ~30-40 s on a CPU runner (one re-encode for SFX
+    # mix + one re-encode for intro/outro concat).
     try:
-        from peanut_reacts.character.video_polish import VideoStyle, add_intro_outro
+        from peanut_reacts.character.video_polish import (
+            VideoStyle, apply_full_polish,
+        )
         polished_path = output_dir / f"reddit_{timestamp}_final.mp4"
         style = VideoStyle(
             title="REDDIT STORIES",
@@ -596,12 +599,20 @@ def run_reddit_pipeline(
             fps=30,
             use_nvenc=_nvenc(),
         )
-        polished = add_intro_outro(video, polished_path, style, work_dir=output_dir)
+        polished = apply_full_polish(
+            video, polished_path, style,
+            raw_script=script,                     # enables emotion-cue SFX
+            num_stories=len(selected),             # story-transition whooshes
+            work_dir=output_dir,
+        )
         if polished and polished.exists() and polished != video:
-            log.info("[Reddit] Polished with intro + outro: %s", polished.name)
+            log.info("[Reddit] Polished with SFX + intro + outro: %s",
+                     polished.name)
             video = polished
         else:
-            log.info("[Reddit] Polish layer skipped/failed — using unpolished video")
+            log.info("[Reddit] Polish layer skipped/partial — using best available")
+            if polished and polished != video:
+                video = polished
     except Exception as e:
         log.warning("[Reddit] Polish crashed (non-fatal): %s", e)
 
