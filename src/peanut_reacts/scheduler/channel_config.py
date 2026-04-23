@@ -16,8 +16,18 @@ class ChannelConfig:
     name: str
     character: str
     source_type: str  # playlist | twitch_vod | lofi | reddit
-    schedule: str  # cron expression
 
+    # Cron expression. Empty string means "no schedule" and is the
+    # right value for channels that are `enabled: false` — the engine
+    # already skips channels with a falsy schedule (see engine.setup).
+    # Making this defaulted lets the YAML simply omit `schedule:` for
+    # disabled channels without a dummy placeholder.
+    schedule: str = ""
+    # Explicit disable switch. When False the engine skips scheduling
+    # AND the queue processor skips firing even if it gets invoked
+    # externally. Belt-and-suspenders with schedule="" so a typo in
+    # one place doesn't re-enable a dangerous channel.
+    enabled: bool = True
     source_urls: list[str] = field(default_factory=list)
     subreddits: list[str] = field(default_factory=list)
     tts_voice: str = "en-US-GuyNeural"

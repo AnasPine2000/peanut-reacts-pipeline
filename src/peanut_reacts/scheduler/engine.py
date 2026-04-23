@@ -43,6 +43,10 @@ class PipelineEngine:
         for ch in self.config.channels:
             self.db.upsert_channel(ch.id, ch.name)
 
+            if not getattr(ch, "enabled", True):
+                log.info("Channel [%s] enabled=false, skipping", ch.id)
+                continue
+
             if not ch.schedule:
                 log.info("Channel [%s] has no schedule, skipping", ch.id)
                 continue
