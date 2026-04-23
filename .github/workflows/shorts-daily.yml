@@ -64,7 +64,18 @@ jobs:
       # ---- API keys (add to repo Settings -> Secrets -> Actions) ----
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      SCRAPE_DO_TOKEN: ${{ secrets.SCRAPE_DO_TOKEN }}
+      # Scrape.do: export under both names because different codepaths
+      # inside the repo use different env names (historical drift).
+      # The unified name to add as a secret is SCRAPEDO_API_TOKEN.
+      SCRAPEDO_API_TOKEN: ${{ secrets.SCRAPEDO_API_TOKEN }}
+      SCRAPE_DO_TOKEN: ${{ secrets.SCRAPEDO_API_TOKEN }}
+      # Reddit OAuth (free, register at reddit.com/prefs/apps). Required
+      # for reddit_stories from cloud runners because Reddit 403s
+      # datacenter IPs on the public JSON endpoint. Scrape.do works as
+      # an alternative but costs $5/mo and Reddit OAuth is free.
+      REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+      REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+      REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
       # Cloud vision (C2): enables cloud GPU describe calls from the
       # runner. Without this, clip_context falls through to Groq's

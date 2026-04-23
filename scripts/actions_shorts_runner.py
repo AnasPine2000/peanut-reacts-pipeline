@@ -70,36 +70,62 @@ def _write_b64_secret(env_name: str, target: Path) -> bool:
     return True
 
 
-def _materialize_secrets(channel_id: str) -> tuple[Path, Path]:
-    """Decode the two required YouTube secrets into ~/.peanut_reacts/.
+def _materialize_secrets(channel_id: str, channel_oauth_token: str = "",
+                          channel_tiktok_cookies: str = "") -> tuple[Path, Path]:
+    """Decode the YouTube secrets into the exact file paths that the
+    channel's YAML config expects.
 
-    Also opportunistically materializes TIKTOK_COOKIES_B64 into the
-    channel-specific TikTok cookie path if the secret is present. The
-    pipeline code checks channel.tiktok_cookies and only attempts
-    cross-post when a file exists, so absent secret = no TikTok, no
-    error.
+    Bug fix (April 23): we were writing the OAuth token to
+    ~/.peanut_reacts/{channel_id}_token.json, but channels.yaml for
+    reddit_stories points at peanut_tiktok_reacts_token.json (that
+    channel shares the Peanut Reacts OAuth per commit 6157cc1). The
+    pipeline then found no token and silently ran without uploading.
+
+    Now we honor the channel's configured oauth_token path exactly +
+    also write a channel-id-named symlink/copy so any future channel
+    that wants the tidy {id}_token.json convention still works.
     """
     secrets_root = Path.home() / ".peanut_reacts"
-    client_secret = secrets_root / "client_secret.json"
-    token_path = secrets_root / f"{channel_id}_token.json"
+    secrets_root.mkdir(parents=True, exist_ok=True)
 
+    client_secret = secrets_root / "client_secret.json"
     if not _write_b64_secret("YT_CLIENT_SECRET_B64", client_secret):
         logging.error("YT_CLIENT_SECRET_B64 is required")
         return Path(), Path()
 
-    if not _write_b64_secret("YT_TOKEN_B64", token_path):
+    # Primary token path: exactly what the channel YAML says. This is the
+    # path run_reddit_pipeline() and all others check.
+    canonical_token = Path(channel_oauth_token).expanduser() if channel_oauth_token else secrets_root / f"{channel_id}_token.json"
+    canonical_token.parent.mkdir(parents=True, exist_ok=True)
+
+    if not _write_b64_secret("YT_TOKEN_B64", canonical_token):
         logging.error("YT_TOKEN_B64 is required")
         return Path(), Path()
 
-    # Optional: TikTok cookies. Not required — we just log and move on
-    # if the env is empty. Picks channel-specific path since a future
-    # multi-account setup may have different cookies per channel.
-    tiktok_path = secrets_root / f"tiktok_{channel_id}.json"
+    # Secondary: also write to the {channel_id}_token.json convention
+    # so that code paths that infer by channel id also work. Cheap
+    # redundancy that prevents silent upload misses.
+    if canonical_token.name != f"{channel_id}_token.json":
+        alt_token = secrets_root / f"{channel_id}_token.json"
+        try:
+            alt_token.write_bytes(canonical_token.read_bytes())
+            alt_token.chmod(0o600)
+            logging.info("Mirrored token to %s", alt_token)
+        except Exception as e:
+            logging.warning("Could not mirror token: %s", e)
+
+    # TikTok cookies: again honor the channel's configured path if set,
+    # fall back to tiktok_{channel_id}.json otherwise.
     if os.environ.get("TIKTOK_COOKIES_B64", "").strip():
+        if channel_tiktok_cookies:
+            tiktok_path = Path(channel_tiktok_cookies).expanduser()
+        else:
+            tiktok_path = secrets_root / f"tiktok_{channel_id}.json"
+        tiktok_path.parent.mkdir(parents=True, exist_ok=True)
         if _write_b64_secret("TIKTOK_COOKIES_B64", tiktok_path):
             logging.info("TikTok cookies materialized at %s", tiktok_path)
 
-    return client_secret, token_path
+    return client_secret, canonical_token
 
 
 def _patch_channel_config(channel_id: str, client_secret: Path, token_path: Path) -> None:
@@ -146,12 +172,6 @@ def main() -> int:
 
     _set_api_env()
 
-    # Materialize OAuth secrets
-    client_secret, token_path = _materialize_secrets(channel_id)
-    if not client_secret.exists() or not token_path.exists():
-        log.error("Secrets missing — aborting")
-        return 1
-
     # Late imports so that logging is set up before any heavy import happens
     from peanut_reacts.scheduler.channel_config import load_channels
     from peanut_reacts.scheduler.db import PipelineDB
@@ -163,6 +183,10 @@ def main() -> int:
     # already injected by the job's `env:` block.
     _load_dotenv()
 
+    # Load channel config EARLY so we know the real oauth_token /
+    # tiktok_cookies paths before writing secrets. Without this we
+    # were guessing the path from channel_id and missing cases like
+    # reddit_stories sharing peanut_tiktok_reacts_token.json.
     cfg_path = ROOT / "channels.yaml"
     cfg = load_channels(cfg_path)
     channel = next((c for c in cfg.channels if c.id == channel_id), None)
@@ -170,6 +194,18 @@ def main() -> int:
         log.error("Channel %r not found in %s", channel_id, cfg_path)
         return 1
 
+    # Materialize OAuth + optional TikTok secrets to the EXACT paths
+    # the channel YAML points at.
+    client_secret, token_path = _materialize_secrets(
+        channel_id,
+        channel_oauth_token=channel.oauth_token,
+        channel_tiktok_cookies=channel.tiktok_cookies,
+    )
+    if not client_secret.exists() or not token_path.exists():
+        log.error("Secrets missing — aborting")
+        return 1
+
+    # (channel + cfg already loaded above before _materialize_secrets)
     if not channel.enabled:
         log.warning("Channel %s is enabled=false in YAML — skipping", channel_id)
         return 0

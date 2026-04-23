@@ -34,6 +34,11 @@ APScheduler>=3.10.0
 scrapling>=0.2.0    # optional, falls back if missing
 numpy>=1.24.0       # used in audio + image ops
 
+# PRAW for Reddit OAuth — the reddit pipeline uses this when
+# REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET are set (the only reliable
+# path from datacenter IPs since Reddit 403s public JSON from clouds).
+praw>=7.7.1
+
 # TikTok upload (C3): Playwright drives the creator-studio upload
 # flow with cookie-based auth. Chromium binary installed separately
 # via `playwright install chromium` in the workflow step.
