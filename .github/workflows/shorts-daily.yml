@@ -56,6 +56,11 @@ jobs:
     env:
       PEANUT_CHANNEL_ID: ${{ github.event.inputs.channel || 'reddit_stories' }}
       DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+      # Opt into Node.js 24 for JavaScript actions (setup-python,
+      # checkout, cache, upload-artifact). GitHub forces this from
+      # 2026-06-02 anyway; flipping it now silences the deprecation
+      # annotation that shows up on every run.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       # ---- API keys (add to repo Settings -> Secrets -> Actions) ----
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
