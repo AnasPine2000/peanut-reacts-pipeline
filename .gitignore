@@ -76,3 +76,12 @@ dashboard/experiments.json
 
 # Spreadsheets (deliverables, not code)
 *.xlsx
+
+# Rhubarb Lip Sync binary (87 MB, downloaded on demand — see
+# scripts/setup_rhubarb.ps1 or assets/peanut_mouth_sprites/PROMPTS.md)
+third_party/Rhubarb-Lip-Sync-*/
+third_party/rhubarb*.zip
+
+# Editor / tool state that sneaks in
+.claire/
+.claude/
