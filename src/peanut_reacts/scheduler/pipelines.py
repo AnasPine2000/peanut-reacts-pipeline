@@ -938,6 +938,15 @@ def run_live_reaction_channel_pipeline(
     db.start_job(job_id, "compile")
 
     try:
+        # Optional: channel.num_source_videos (or compilation_size) to
+        # pull N videos and concat into one long reaction source. Matches
+        # the 1-5hr Sidemen compilation format. Default 1 (single video).
+        num_sources = (
+            getattr(channel, "num_source_videos", None)
+            or getattr(channel, "compilation_size", None)
+            or 1
+        )
+
         result = run_live_reaction_pipeline(
             output_dir=PROJECT_ROOT / settings.output_dir / channel.id,
             playlist_urls=playlist_urls,
@@ -946,6 +955,7 @@ def run_live_reaction_channel_pipeline(
             upload_service=youtube_service,
             upload_privacy=channel.upload_privacy,
             tags=channel.tags,
+            num_source_videos=int(num_sources),
         )
         if result.get("youtube_url"):
             db.complete_job(job_id, result.get("video_path", ""), result["youtube_url"])
