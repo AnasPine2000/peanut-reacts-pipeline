@@ -34,10 +34,19 @@ marked REQUIRED.
 | `DEEPSEEK_API_KEY` | **REQUIRED** | Verdict LLM | `platform.deepseek.com/api_keys` |
 | `YT_CLIENT_SECRET_B64` | **REQUIRED** | OAuth app config | `base64 -w0 ~/.peanut_reacts/client_secret.json` |
 | `YT_TOKEN_B64` | **REQUIRED** | Refresh token for upload | `base64 -w0 ~/.peanut_reacts/reddit_stories_token.json` |
-| `GROQ_API_KEY` | optional | Vision fallback | `console.groq.com/keys` |
+| `REPLICATE_API_TOKEN` | recommended | Cloud vision (C2) — no GPU on runners otherwise | `replicate.com/account/api-tokens` |
+| `GROQ_API_KEY` | optional | Vision fallback (rate-limited) | `console.groq.com/keys` |
 | `SCRAPE_DO_TOKEN` | optional | Reddit scraping (some pipelines) | `dashboard.scrape.do` |
 | `ELEVENLABS_API_KEY` | optional | Expressive voice (otherwise Edge TTS) | `elevenlabs.io/api` |
 | `DISCORD_WEBHOOK_URL` | optional | Failure notifications | Discord channel webhook settings |
+
+**Note on `REPLICATE_API_TOKEN`**: the `reddit_stories` channel doesn't
+use vision (it's pure Reddit text → Cashew narration → TTS), so
+Replicate isn't required for it. But `peanut_tiktok_reacts` and
+anything `live_reaction` do vision on every clip, and GitHub runners
+have no GPU — without Replicate those fall through to rate-limited
+Groq and often produce generic "A funny clip" descriptions. See
+`deploy/REMOTE_VISION_SETUP.md` for the full routing logic.
 
 ### How to base64-encode the OAuth blobs
 

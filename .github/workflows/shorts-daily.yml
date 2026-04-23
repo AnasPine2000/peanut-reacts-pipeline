@@ -61,6 +61,12 @@ jobs:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       SCRAPE_DO_TOKEN: ${{ secrets.SCRAPE_DO_TOKEN }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      # Cloud vision (C2): enables cloud GPU describe calls from the
+      # runner. Without this, clip_context falls through to Groq's
+      # rate-limited free tier, which throttles hard on multi-describe
+      # Shorts. Get one at replicate.com/account/api-tokens — cost is
+      # ~$0.003 per describe, $1-3/mo at current volume.
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       # ---- OAuth blobs (base64 of the JSON files) ----
       YT_CLIENT_SECRET_B64: ${{ secrets.YT_CLIENT_SECRET_B64 }}
       YT_TOKEN_B64: ${{ secrets.YT_TOKEN_B64 }}

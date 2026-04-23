@@ -36,20 +36,38 @@ log = logging.getLogger(__name__)
 
 # ── Vision backend selection ───────────────────────────────────────────────
 #
-# Priority order:
+# Priority order (tried in sequence; first one to return a description wins):
+#
 #   1. Local Ollama (Qwen3-VL-8B / MiniCPM-V 4.5 etc.) when reachable.
-#      Apache-2.0, no quota, ~3s per 3-frame call on an RTX 4070 with a Q4
-#      GGUF. Set OLLAMA_VISION_MODEL="qwen3-vl:8b" after `ollama pull`.
-#   2. Groq Llama-4 Scout/Maverick when Ollama is unreachable or returns
-#      an error. Free tier is rate-limited; keep throttled.
+#      Apache-2.0, no quota, ~3s per 3-frame call on an RTX 4070 with a
+#      Q4 GGUF. Set OLLAMA_VISION_MODEL="qwen3-vl:8b" after `ollama pull`.
+#      Best for local dev + VPS runs where the model is resident.
+#
+#   2. Replicate (cloud GPU, pay-per-call, ~$0.003 per describe).
+#      Enabled by REPLICATE_API_TOKEN. Works from any environment that
+#      has internet + a token — specifically GitHub Actions runners
+#      where local Ollama isn't viable (no GPU, ephemeral filesystem).
+#      Takes a single middle-frame (Replicate models don't accept
+#      multi-image inputs uniformly).
+#
+#   3. Groq Llama-4 Scout/Maverick fallback. Free tier, heavily
+#      rate-limited on bursts. Used only when the first two tiers are
+#      unavailable or erroring.
+#
+#   4. Generic "A funny clip" string if all three fail — so the
+#      downstream LLM still produces SOMETHING instead of the pipeline
+#      hard-crashing.
 #
 # Env vars:
-#   OLLAMA_URL           default http://localhost:11434
-#   OLLAMA_VISION_MODEL  e.g. "qwen3-vl:8b" — empty disables Ollama
-#   GROQ_API_KEY         for the fallback
+#   OLLAMA_URL               default http://localhost:11434
+#   OLLAMA_VISION_MODEL      e.g. "qwen3-vl:8b" — empty disables Ollama
+#   REPLICATE_API_TOKEN      Replicate API token — empty disables Replicate
+#   REPLICATE_VISION_MODEL   override the default hosted model
+#   GROQ_API_KEY             for the fallback
 #
-# The priority order + fallback chain is logged at INFO so you can see
-# which backend served each clip description.
+# The priority + which backend served each call is logged at INFO level
+# so you can see routing behavior ("ollama/qwen3-vl:8b", "replicate/qwen2-vl-7b-instruct",
+# "groq/meta-llama/llama-4-scout-17b-16e-instruct").
 
 
 # ── Vision: local Ollama (Qwen3-VL etc.) ───────────────────────────────────
@@ -138,6 +156,130 @@ def _describe_via_ollama(content: list[dict]) -> Optional[str]:
     except Exception as e:
         log.warning("[CTX] Ollama describe failed: %s", str(e)[:200])
         _ollama_reachable_invalidate()
+        return None
+
+
+# ── Vision: Replicate (cloud GPU, pay-per-call) ────────────────────────────
+#
+# Used when the pipeline runs somewhere without a local GPU — GitHub
+# Actions runners being the main case. Replicate hosts pre-deployed
+# vision-LM models and exposes a simple POST API. We hit a Qwen2.5-VL
+# endpoint, get a description back in ~3-6 seconds, and pay about
+# $0.003 per call. At 3 Shorts/day × ~5 describes each = 15/day =
+# $0.05/day ≈ $1.50/month. Cheaper than running Modal at this scale.
+#
+# Enabled by REPLICATE_API_TOKEN. Model override via REPLICATE_VISION_MODEL
+# if we want to A/B different backends.
+
+REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
+REPLICATE_DEFAULT_MODEL = os.environ.get(
+    "REPLICATE_VISION_MODEL",
+    # Qwen2.5-VL-7B is the one I know is reliably deployed on Replicate
+    # as of 2026. If we switch later we can override via env without code
+    # change.
+    "lucataco/qwen2-vl-7b-instruct",
+)
+
+
+def _describe_via_replicate(content: list[dict]) -> Optional[str]:
+    """Call Replicate's prediction API with the middle frame + prompt text.
+
+    Replicate's hosted vision models accept a single image + prompt, not
+    the multi-image OpenAI format we use for Ollama/Groq. So we pick the
+    middle frame (the most representative of a short clip) and pass its
+    data URL along with the prompt extracted from content[0].
+
+    Returns None on any failure so the caller falls through to Groq.
+    """
+    api_token = os.environ.get("REPLICATE_API_TOKEN", "").strip()
+    if not api_token:
+        return None
+
+    # Extract prompt + frames from the OpenAI-style content list
+    prompt = ""
+    frame_urls: list[str] = []
+    for part in content:
+        if part.get("type") == "text":
+            prompt = part.get("text", "")
+        elif part.get("type") == "image_url":
+            url = part.get("image_url", {}).get("url", "")
+            if url:
+                frame_urls.append(url)
+
+    if not frame_urls:
+        return None
+
+    # Pick the middle frame
+    mid_url = frame_urls[len(frame_urls) // 2]
+
+    try:
+        # POST: create prediction
+        resp = httpx.post(
+            REPLICATE_API_URL,
+            headers={
+                "Authorization": f"Token {api_token}",
+                "Content-Type": "application/json",
+                "Prefer": "wait=30",    # sync response if model finishes within 30s
+            },
+            json={
+                "version": REPLICATE_DEFAULT_MODEL,
+                "input": {
+                    "image": mid_url,
+                    "prompt": prompt,
+                    "max_tokens": 120,
+                },
+            },
+            timeout=60,
+        )
+        if resp.status_code not in (200, 201):
+            log.warning(
+                "[CTX] Replicate returned %d: %s",
+                resp.status_code, resp.text[:200],
+            )
+            return None
+
+        body = resp.json()
+        # Replicate returns {"status": "succeeded", "output": "..."} when
+        # sync, or {"status": "starting", "id": "..."} when async. Handle
+        # the async path by polling the status URL for up to 45 s.
+        status = body.get("status", "")
+        if status == "succeeded":
+            output = body.get("output", "")
+        else:
+            # Poll
+            import time as _time
+            poll_url = body.get("urls", {}).get("get") or body.get("get", "")
+            if not poll_url:
+                log.warning("[CTX] Replicate async but no poll URL")
+                return None
+            deadline = _time.time() + 45
+            while _time.time() < deadline:
+                _time.sleep(1.5)
+                r2 = httpx.get(poll_url, headers={"Authorization": f"Token {api_token}"}, timeout=10)
+                if r2.status_code != 200:
+                    continue
+                b2 = r2.json()
+                if b2.get("status") == "succeeded":
+                    output = b2.get("output", "")
+                    break
+                if b2.get("status") in ("failed", "canceled"):
+                    log.warning("[CTX] Replicate %s: %s", b2.get("status"), b2.get("error", "")[:200])
+                    return None
+            else:
+                log.warning("[CTX] Replicate poll timed out after 45s")
+                return None
+
+        # Output may be a string or a list of strings depending on model
+        if isinstance(output, list):
+            output = "".join(str(x) for x in output)
+        desc = str(output).strip().strip('"\'')
+        if not desc:
+            return None
+        log.info("[CTX] Clip described (replicate/%s): %s",
+                 REPLICATE_DEFAULT_MODEL.split("/")[-1], desc[:100])
+        return desc
+    except Exception as e:
+        log.warning("[CTX] Replicate describe failed: %s", str(e)[:200])
         return None
 
 
@@ -244,12 +386,20 @@ def describe_clip(clip_path: Path, num_frames: int = 3) -> str:
             "image_url": {"url": b64},
         })
 
-    # Tier 1: local Ollama
+    # Tier 1: local Ollama (fastest + free, requires OLLAMA_VISION_MODEL
+    # set and a local Ollama server running)
     ollama_desc = _describe_via_ollama(content)
     if ollama_desc:
         return ollama_desc
 
-    # Tier 2: Groq fallback
+    # Tier 2: Replicate (cloud GPU, pay-per-call, works from any runner
+    # that has REPLICATE_API_TOKEN env var set — the main use case is
+    # GitHub Actions Shorts pipelines where local Ollama isn't viable)
+    replicate_desc = _describe_via_replicate(content)
+    if replicate_desc:
+        return replicate_desc
+
+    # Tier 3: Groq fallback
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
         log.warning("No GROQ_API_KEY and Ollama unreachable; returning generic desc")
