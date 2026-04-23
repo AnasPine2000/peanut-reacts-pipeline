@@ -39,6 +39,13 @@ class ChannelConfig:
     oauth_token: str = ""
     client_secrets: str = ""
     upload_privacy: str = "public"
+    # Optional TikTok cross-post cookies. If set, after the primary
+    # YouTube upload the pipeline also drives a Playwright upload to
+    # TikTok using these session cookies. Failure there never kills
+    # the YouTube result. Path is ~-expanded at use-site.
+    tiktok_cookies: str = ""
+    # Optional Instagram Reels cross-post cookies (future — C3.2).
+    instagram_cookies: str = ""
     max_videos_per_run: int = 2
     max_segments_per_run: int = 5
     video_format: str = "standard"  # standard | compilation

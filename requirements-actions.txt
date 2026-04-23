@@ -34,6 +34,11 @@ APScheduler>=3.10.0
 scrapling>=0.2.0    # optional, falls back if missing
 numpy>=1.24.0       # used in audio + image ops
 
+# TikTok upload (C3): Playwright drives the creator-studio upload
+# flow with cookie-based auth. Chromium binary installed separately
+# via `playwright install chromium` in the workflow step.
+playwright>=1.45.0
+
 # Fallback-safe: these are referenced as conditional imports, not required
 # for the Reddit-stories or playlist Shorts pipelines. Keeping them out
 # to slim the runner. Re-add if a new pipeline needs them:

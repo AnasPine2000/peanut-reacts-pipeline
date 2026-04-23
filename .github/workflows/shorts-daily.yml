@@ -67,6 +67,12 @@ jobs:
       # Shorts. Get one at replicate.com/account/api-tokens — cost is
       # ~$0.003 per describe, $1-3/mo at current volume.
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+      # TikTok cross-post (C3): base64-encoded browser cookie export.
+      # When present, the runner writes it to
+      # ~/.peanut_reacts/tiktok_<channel>.json and the pipeline can
+      # cross-post to TikTok via Playwright after the YouTube upload
+      # succeeds. Empty = skip TikTok, YouTube-only upload.
+      TIKTOK_COOKIES_B64: ${{ secrets.TIKTOK_COOKIES_B64 }}
       # ---- OAuth blobs (base64 of the JSON files) ----
       YT_CLIENT_SECRET_B64: ${{ secrets.YT_CLIENT_SECRET_B64 }}
       YT_TOKEN_B64: ${{ secrets.YT_TOKEN_B64 }}
@@ -101,6 +107,19 @@ jobs:
           # `python -m peanut_reacts.scheduler.runner` etc. resolve.
           pip install -q -e .
           python -c "import peanut_reacts; print('peanut_reacts OK')"
+
+      - name: Install Playwright Chromium
+        # Only needed for TikTok cross-post. If you don't use TikTok,
+        # this step still runs but the cost is ~15 s cached — not worth
+        # guarding. If cache is cold it's ~90 s.
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-v1
+      - name: Download Chromium (if cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: playwright install --with-deps chromium
 
       - name: Preflight — secrets present?
         run: |

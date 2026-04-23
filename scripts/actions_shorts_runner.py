@@ -71,7 +71,14 @@ def _write_b64_secret(env_name: str, target: Path) -> bool:
 
 
 def _materialize_secrets(channel_id: str) -> tuple[Path, Path]:
-    """Decode the two required YouTube secrets into ~/.peanut_reacts/."""
+    """Decode the two required YouTube secrets into ~/.peanut_reacts/.
+
+    Also opportunistically materializes TIKTOK_COOKIES_B64 into the
+    channel-specific TikTok cookie path if the secret is present. The
+    pipeline code checks channel.tiktok_cookies and only attempts
+    cross-post when a file exists, so absent secret = no TikTok, no
+    error.
+    """
     secrets_root = Path.home() / ".peanut_reacts"
     client_secret = secrets_root / "client_secret.json"
     token_path = secrets_root / f"{channel_id}_token.json"
@@ -83,6 +90,14 @@ def _materialize_secrets(channel_id: str) -> tuple[Path, Path]:
     if not _write_b64_secret("YT_TOKEN_B64", token_path):
         logging.error("YT_TOKEN_B64 is required")
         return Path(), Path()
+
+    # Optional: TikTok cookies. Not required — we just log and move on
+    # if the env is empty. Picks channel-specific path since a future
+    # multi-account setup may have different cookies per channel.
+    tiktok_path = secrets_root / f"tiktok_{channel_id}.json"
+    if os.environ.get("TIKTOK_COOKIES_B64", "").strip():
+        if _write_b64_secret("TIKTOK_COOKIES_B64", tiktok_path):
+            logging.info("TikTok cookies materialized at %s", tiktok_path)
 
     return client_secret, token_path
 
