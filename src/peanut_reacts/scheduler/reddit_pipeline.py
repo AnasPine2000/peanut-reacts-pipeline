@@ -575,12 +575,35 @@ def run_reddit_pipeline(
     title_parts = [s["title"][:30] for s in selected[:2]]
     video_title = f"{character} Reads: {' | '.join(title_parts)}"
 
-    final = output_dir / f"reddit_{timestamp}_final.mp4"
+    final = output_dir / f"reddit_{timestamp}_unpolished.mp4"
     video = composite_reddit_video(audio, background, final, video_title,
                                    subtitles_ass=subs_ass)
     if not video:
         result["errors"].append("Composite failed")
         return result
+
+    # Step 6b: Polish layer (intro + outro). Failure here falls back to
+    # the unpolished video so the pipeline always has an output. Adds
+    # ~20-30 s on a CPU runner (one re-encode concatenating 3 clips).
+    try:
+        from peanut_reacts.character.video_polish import VideoStyle, add_intro_outro
+        polished_path = output_dir / f"reddit_{timestamp}_final.mp4"
+        style = VideoStyle(
+            title="REDDIT STORIES",
+            subtitle=f"narrated by {character}",
+            character=character,
+            resolution=(1920, 1080),
+            fps=30,
+            use_nvenc=_nvenc(),
+        )
+        polished = add_intro_outro(video, polished_path, style, work_dir=output_dir)
+        if polished and polished.exists() and polished != video:
+            log.info("[Reddit] Polished with intro + outro: %s", polished.name)
+            video = polished
+        else:
+            log.info("[Reddit] Polish layer skipped/failed — using unpolished video")
+    except Exception as e:
+        log.warning("[Reddit] Polish crashed (non-fatal): %s", e)
 
     result["video_path"] = str(video)
     log.info("[Reddit] Video ready: %s (%.1f min)", video.name, duration / 60)
