@@ -1,0 +1,44 @@
+# Slim dependency set for GitHub Actions runners.
+#
+# The full requirements.txt pulls in torch (2 GB), openai-whisper (500 MB),
+# and sentence-transformers (300 MB+) which we don't need for Shorts-format
+# Reddit story / trending-clip pipelines. This file carries only what those
+# pipelines actually import, cutting cold-cache install time from ~8 min to
+# ~1 min on a GitHub-hosted runner.
+#
+# If a channel pipeline you add to the workflow imports something new, the
+# Actions run will fail on ImportError at startup — add that package here
+# and push. Keep this list tight; every line is CI time.
+
+# Core HTTP + YAML
+httpx>=0.25.0
+PyYAML>=6.0
+requests>=2.32.0
+
+# YouTube source + upload
+yt-dlp>=2024.1.0
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.1.0
+google-auth>=2.25.0
+
+# Media pipeline (ffmpeg is installed via apt in the workflow)
+Pillow>=10.0.0
+pydub>=0.25.1
+edge-tts>=6.1.0
+pysrt>=1.1.2
+
+# Scheduler + job framework (used by channel_config, orchestrator imports)
+APScheduler>=3.10.0
+
+# Reddit + trending scraping
+scrapling>=0.2.0    # optional, falls back if missing
+numpy>=1.24.0       # used in audio + image ops
+
+# Fallback-safe: these are referenced as conditional imports, not required
+# for the Reddit-stories or playlist Shorts pipelines. Keeping them out
+# to slim the runner. Re-add if a new pipeline needs them:
+#   openai-whisper
+#   sentence-transformers
+#   scikit-learn
+#   moviepy
+#   torch
