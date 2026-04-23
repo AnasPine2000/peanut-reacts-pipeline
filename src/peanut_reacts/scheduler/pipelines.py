@@ -721,6 +721,7 @@ def run_reddit_pipeline(
             upload_service=upload_service,
             upload_privacy=channel.upload_privacy,
             tags=channel.tags,
+            tiktok_cookies=channel.tiktok_cookies,
         )
 
         if result.get("errors"):

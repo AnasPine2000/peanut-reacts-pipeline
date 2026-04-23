@@ -227,6 +227,12 @@ channels:
     client_secrets: "~/.peanut_reacts/client_secret.json"
     upload_privacy: public
     max_videos_per_run: 1
+    # TikTok cross-post: after every successful YouTube upload, the
+    # pipeline also pushes the same video to TikTok via Playwright +
+    # cookie session. Actions decodes TIKTOK_COOKIES_B64 into this
+    # exact path; the VPS needs the real file to be scp'd there.
+    # Absent file = YouTube-only, no error. See deploy/TIKTOK_UPLOAD_SETUP.md.
+    tiktok_cookies: "~/.peanut_reacts/tiktok_reddit_stories.json"
     tags: ["reddit stories", "reddit", "storytime", "narration", "aita", "reddit readings", "askreddit"]
 
   # ── Channel 8: Peanut TikTok Reacts (clips UK) ───────────────

@@ -498,6 +498,7 @@ def run_reddit_pipeline(
     upload_service=None,
     upload_privacy: str = "public",
     tags: list[str] = None,
+    tiktok_cookies: str = "",
 ) -> dict:
     """Full Reddit stories pipeline. Returns {video_path, youtube_url, shorts_count}."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -611,5 +612,55 @@ def run_reddit_pipeline(
         except Exception as e:
             log.error("[Reddit] Upload failed: %s", e)
             result["errors"].append(f"Upload: {e}")
+
+    # Step 8 (optional): TikTok cross-post. Opt-in per channel via
+    # channels.yaml `tiktok_cookies:` field. Runs AFTER YouTube (so a
+    # flaky TikTok never blocks the primary upload) and its failure is
+    # logged as a warning, never added to result["errors"]. The
+    # downstream pipeline contract is: "YouTube success = overall
+    # success"; TikTok is a bonus.
+    if tiktok_cookies and result.get("youtube_url"):
+        tiktok_path = Path(tiktok_cookies).expanduser()
+        if not tiktok_path.exists():
+            log.warning(
+                "[Reddit] TikTok cookies configured but file missing: %s "
+                "— skipping cross-post. Re-export cookies to enable.",
+                tiktok_path,
+            )
+        else:
+            try:
+                from peanut_reacts.upload.tiktok_upload import (
+                    TikTokMetadata, TikTokUploader,
+                )
+                # Build a short TikTok-optimized caption. Full YouTube
+                # description is way too long for TikTok — viewers tap
+                # away when a caption doesn't have an immediate hook.
+                hook_story = selected[0] if selected else {}
+                hook_title = (hook_story.get("title") or "Reddit drama").strip()
+                # First 80 chars of the top story title — already a
+                # clickbait hook (that's why the post got 19k upvotes).
+                tt_caption = f"😱 {hook_title[:80]}"
+                tt_hashtags = [
+                    "reddit", "redditstories", "storytime", "fyp",
+                    character.lower(),
+                ] + subreddit_tags[:2]
+                tt_meta = TikTokMetadata(
+                    caption=tt_caption,
+                    hashtags=tt_hashtags,
+                    privacy="public",
+                )
+                log.info("[Reddit] Cross-posting to TikTok...")
+                tt_res = TikTokUploader(cookies_path=tiktok_path).upload(
+                    video, tt_meta,
+                )
+                if tt_res.success:
+                    result["tiktok_url"] = tt_res.url
+                    log.info("[Reddit] TikTok upload OK: %s",
+                             tt_res.url or "(URL not captured)")
+                else:
+                    log.warning("[Reddit] TikTok upload failed (non-fatal): %s",
+                                tt_res.error)
+            except Exception as e:
+                log.warning("[Reddit] TikTok cross-post crashed (non-fatal): %s", e)
 
     return result

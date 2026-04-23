@@ -55,7 +55,14 @@ jobs:
     # Default channel for scheduled runs; dispatch input overrides it.
     env:
       PEANUT_CHANNEL_ID: ${{ github.event.inputs.channel || 'reddit_stories' }}
-      DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+      # Default DRY_RUN was 'true' during setup (forces uploads to
+      # privacy=private so we could verify the pipeline end-to-end
+      # without polluting the public channel). Flipped to 'false' on
+      # 2026-04-23 after run #2 succeeded end-to-end (video
+      # 6C5ZALV2w6w verified). Scheduled crons now go LIVE to the
+      # Peanut Reacts channel. Manual workflow_dispatch runs can still
+      # pass dry_run=true via the input if you want to test.
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
       # Opt into Node.js 24 for JavaScript actions (setup-python,
       # checkout, cache, upload-artifact). GitHub forces this from
       # 2026-06-02 anyway; flipping it now silences the deprecation
