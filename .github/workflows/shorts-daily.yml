@@ -135,7 +135,7 @@ jobs:
         # Only needed for TikTok cross-post. If you don't use TikTok,
         # this step still runs but the cost is ~15 s cached — not worth
         # guarding. If cache is cold it's ~90 s.
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
