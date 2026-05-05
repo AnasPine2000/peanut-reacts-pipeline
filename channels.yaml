@@ -262,6 +262,163 @@ channels:
     tiktok_cookies: "~/.peanut_reacts/tiktok_peanut_tiktok_reacts.json"
     tags: ["peanut reacts", "tiktok", "viral", "reaction", "funny", "shorts", "trending"]
 
+  # ═════════════════════════════════════════════════════════════════
+  # NETWORK PHASE 1 — added 2026-04-23 — €4k/mo target via 5-channel
+  # Reddit-narrator network. All 4 new channels share the
+  # run_reddit_pipeline backbone with reddit_stories; each gets its
+  # own subreddit set, voice, character, and visual styling so they
+  # read as distinct creators. Cron times stagger every 3 hours
+  # across the day for clean YouTube-algo signal + spread VPS/Actions
+  # load. See BUSINESS_PLAN.md for monetization math.
+  # ═════════════════════════════════════════════════════════════════
+
+  # ── Channel 9: Money Drama (HIGH RPM tier) ─────────────────────
+  # Tier-1 RPM ($12-18) — finance content pays 3x baseline.
+  # This is the revenue priority of the network. Higher production
+  # care + the only channel doing TikTok cross-post in the first 30 days.
+  - id: money_drama
+    name: "Money Drama"
+    character: money_drama_narrator
+    source_type: reddit
+    subreddits:
+      - personalfinance
+      - povertyfinance
+      - financialindependence
+      - debtfree
+      - StudentLoans
+      - Frugal
+    min_score: 1500
+    stories_per_video: 3
+    tts_voice: "en-US-GuyNeural"
+    tts_rate: "+0%"
+    llm_personality: >
+      You are an authoritative financial narrator with a calm but
+      slightly cynical edge. You read real Reddit money stories —
+      crushing debt, surprise wealth, family money fights, financial
+      betrayals — without judgment but with sharp observations.
+      Paraphrase the source, never quote. Insert a 1-2 sentence
+      financial insight between stories ("here's what most people
+      miss in this situation..."). Punchy and grounded.
+    schedule: "0 11 * * *"
+    execution_env: vps
+    enabled: true
+    oauth_token: "~/.peanut_reacts/money_drama_token.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
+    upload_privacy: public
+    max_videos_per_run: 1
+    # Money/finance dominates TikTok — only channel cross-posting for now.
+    tiktok_cookies: "~/.peanut_reacts/tiktok_money_drama.json"
+    tags: ["money", "finance", "reddit money stories", "personal finance", "debt", "money drama", "financial independence", "reddit"]
+
+  # ── Channel 10: Karma Files (Petty / Pro Revenge) ──────────────
+  # Highest engagement on YouTube right now per VidIQ trends.
+  # Slightly younger, sardonic narrator; visual emphasis on dramatic
+  # pauses (the polish layer adds extra SFX on resolution moments).
+  - id: karma_files
+    name: "The Karma Files"
+    character: karma_narrator
+    source_type: reddit
+    subreddits:
+      - pettyrevenge
+      - ProRevenge
+      - NuclearRevenge
+      - JUSTNOMIL
+      - entitledparents
+      - ChoosingBeggars
+    min_score: 2000
+    stories_per_video: 3
+    tts_voice: "en-US-AndrewNeural"
+    tts_rate: "+5%"
+    llm_personality: >
+      You are a sardonic narrator who LOVES a satisfying revenge
+      story. You read real Reddit posts where someone got their
+      perfect comeuppance. Paraphrase the setup with mild eye-rolling
+      at the antagonist, build tension toward the payoff, then deliver
+      the resolution with a tiny pause and a knowing aside. Punchy.
+      Never moralize — let the karma speak.
+    schedule: "0 14 * * *"
+    execution_env: vps    # actions also has 14:00 slot if VPS overloaded
+    enabled: true
+    oauth_token: "~/.peanut_reacts/karma_files_token.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
+    upload_privacy: public
+    max_videos_per_run: 1
+    tiktok_cookies: ""    # not cross-posting until month 2
+    tags: ["reddit", "petty revenge", "pro revenge", "karma", "reddit stories", "storytime", "satisfying", "comeuppance"]
+
+  # ── Channel 11: Workplace Wars ─────────────────────────────────
+  # Distinct sub-niche — antiwork, malicious compliance, recruiting
+  # nightmares. Calm British voice for contrast against the more
+  # American-sounding sibling channels. Younger working-age audience
+  # which trends well on Shorts.
+  - id: workplace_wars
+    name: "Workplace Wars"
+    character: workplace_narrator
+    source_type: reddit
+    subreddits:
+      - antiwork
+      - recruitinghell
+      - MaliciousCompliance
+      - WorkReform
+      - jobs
+      - cscareerquestions
+    min_score: 2000
+    stories_per_video: 3
+    tts_voice: "en-GB-RyanNeural"
+    tts_rate: "+5%"
+    llm_personality: >
+      You are a dry, slightly weary British narrator reading workplace
+      horror stories — manager nightmares, recruiter lies, malicious
+      compliance victories. Calm, observational, occasionally
+      deadpan. Paraphrase the absurd corporate-speak with a hint of
+      "oh of course they said that". The audience has all worked
+      these jobs; treat them as in on the joke.
+    schedule: "0 17 * * *"
+    execution_env: vps
+    enabled: true
+    oauth_token: "~/.peanut_reacts/workplace_wars_token.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
+    upload_privacy: public
+    max_videos_per_run: 1
+    tiktok_cookies: ""
+    tags: ["antiwork", "reddit work stories", "recruiting hell", "malicious compliance", "workplace", "reddit stories", "career"]
+
+  # ── Channel 12: Heart Drama (Relationships) ────────────────────
+  # Female voice for variety. Relationship subreddits draw a different
+  # demographic — slightly more female-skewed audience, higher
+  # comments per view, strong Shorts conversion.
+  - id: heart_drama
+    name: "Heart Drama"
+    character: heart_narrator
+    source_type: reddit
+    subreddits:
+      - relationship_advice
+      - AmIOverreacting
+      - AmITheAngel
+      - dating_advice
+      - BreakUps
+      - survivinginfidelity
+    min_score: 1500
+    stories_per_video: 3
+    tts_voice: "en-US-AriaNeural"
+    tts_rate: "+0%"
+    llm_personality: >
+      You are a warm but observant narrator reading anonymous
+      relationship stories — the messy, complicated kind. Paraphrase
+      with empathy for both sides; never tell the audience what to
+      think. Build emotional stakes early, let the twists land
+      naturally. Insert one short reflection between stories.
+      Conversational, never preachy.
+    schedule: "0 20 * * *"
+    execution_env: actions    # GitHub Actions handles the late slot
+    enabled: true
+    oauth_token: "~/.peanut_reacts/heart_drama_token.json"
+    client_secrets: "~/.peanut_reacts/client_secret.json"
+    upload_privacy: public
+    max_videos_per_run: 1
+    tiktok_cookies: ""
+    tags: ["relationship advice reddit", "reddit relationships", "dating stories", "am i overreacting", "reddit stories", "storytime"]
+
 # ── Global Settings ────────────────────────────────────────────
 settings:
   llm_provider: deepseek
