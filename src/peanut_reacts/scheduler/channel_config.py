@@ -46,6 +46,12 @@ class ChannelConfig:
     tiktok_cookies: str = ""
     # Optional Instagram Reels cross-post cookies (future — C3.2).
     instagram_cookies: str = ""
+    # Optional PNGtuber narrator avatar. Points at a directory that
+    # must contain narrator_closed.png + narrator_open.png. When set,
+    # the pipeline overlays a 2-state lip-flap character driven by the
+    # narration audio. Empty = faceless video (current default).
+    # See character/pngtuber.py.
+    narrator_avatar: str = ""
     max_videos_per_run: int = 2
     max_segments_per_run: int = 5
     video_format: str = "standard"  # standard | compilation

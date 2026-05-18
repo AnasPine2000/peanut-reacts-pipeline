@@ -238,6 +238,13 @@ channels:
     # exact path; the VPS needs the real file to be scp'd there.
     # Absent file = YouTube-only, no error. See deploy/TIKTOK_UPLOAD_SETUP.md.
     tiktok_cookies: "~/.peanut_reacts/tiktok_reddit_stories.json"
+    # PNGtuber narrator avatar EXPERIMENT (2026-04-23). reddit_stories is
+    # the test channel — ship ~10 videos with the avatar, compare 30-day
+    # retention vs. the channel's prior faceless videos. If retention
+    # improves, roll the avatar to all 5 network channels. If not, set
+    # this back to "" and we've spent one week, learned the answer.
+    # Directory must contain narrator_closed.png + narrator_open.png.
+    narrator_avatar: "assets/narrator"
     tags: ["reddit stories", "reddit", "storytime", "narration", "aita", "reddit readings", "askreddit"]
 
   # ── Channel 8: Peanut TikTok Reacts (clips UK) ───────────────

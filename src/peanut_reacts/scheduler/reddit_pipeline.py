@@ -499,6 +499,7 @@ def run_reddit_pipeline(
     upload_privacy: str = "public",
     tags: list[str] = None,
     tiktok_cookies: str = "",
+    narrator_avatar: str = "",
 ) -> dict:
     """Full Reddit stories pipeline. Returns {video_path, youtube_url, shorts_count}."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -581,6 +582,41 @@ def run_reddit_pipeline(
     if not video:
         result["errors"].append("Composite failed")
         return result
+
+    # Step 6a: PNGtuber narrator avatar (opt-in via channel.narrator_avatar).
+    # Overlays a 2-state lip-flap character driven by the narration
+    # audio. Runs BEFORE the polish layer so the avatar is part of the
+    # main content; intro/outro cards wrap around it cleanly. Failure
+    # is non-fatal — the faceless video ships if the avatar can't render.
+    if narrator_avatar:
+        avatar_dir = Path(narrator_avatar).expanduser()
+        closed = avatar_dir / "narrator_closed.png"
+        opened = avatar_dir / "narrator_open.png"
+        if closed.exists() and opened.exists():
+            try:
+                from peanut_reacts.character.pngtuber import (
+                    PngTuberStyle, add_narrator_avatar,
+                )
+                style = PngTuberStyle(
+                    closed_sprite=closed,
+                    open_sprite=opened,
+                    position="bottom-left",
+                    size_frac=0.26,
+                )
+                avatared = output_dir / f"reddit_{timestamp}_avatar.mp4"
+                res = add_narrator_avatar(video, audio, style, avatared)
+                if res and res.exists():
+                    log.info("[Reddit] Narrator avatar composited: %s", res.name)
+                    video = res
+                else:
+                    log.info("[Reddit] Avatar skipped/failed — faceless video kept")
+            except Exception as e:
+                log.warning("[Reddit] Avatar crashed (non-fatal): %s", e)
+        else:
+            log.warning(
+                "[Reddit] narrator_avatar set but sprites missing in %s "
+                "(need narrator_closed.png + narrator_open.png)", avatar_dir,
+            )
 
     # Step 6b: Polish layer (SFX + intro + outro). Failure here falls
     # back to the unpolished video so the pipeline always has an
