@@ -270,6 +270,72 @@ def generate_narration_script(stories: list[dict], llm_provider, character: str 
         return ""
 
 
+def generate_emotion_timeline(script: str, total_duration: float, llm_provider):
+    """Ask the LLM where the emotional story beats are, for the avatar.
+
+    A second short DeepSeek call over the finished script. Returns a
+    list of pngtuber.EmotionBeat — moments where a reacting narrator's
+    face would visibly change. The avatar holds the matching
+    expression sprite for ~3 s on each beat.
+
+    Kept SEPARATE from the script-generation call so the spoken script
+    stays clean (no inline [emotion] tags to leak into subtitles —
+    that bug is why we strip brackets aggressively now). Cheap:
+    ~$0.001 per call.
+
+    Returns [] on any failure — the avatar then degrades gracefully to
+    plain lip-flap, no crash.
+    """
+    import json
+    from peanut_reacts.character.pngtuber import EmotionBeat, DEFAULT_BEAT_HOLD_S
+
+    if not script or total_duration <= 0:
+        return []
+
+    prompt = (
+        "Below is a YouTube narration script. Identify the 4 to 8 "
+        "STRONGEST emotional beats — the moments where a narrator "
+        "reacting on camera would visibly change expression.\n"
+        "For each beat give:\n"
+        "  at      — position as a fraction 0.0-1.0 through the script\n"
+        "  emotion — one of: shocked, laughing, angry, sad\n"
+        "Output ONLY a JSON array, nothing else. Example:\n"
+        '[{"at": 0.08, "emotion": "shocked"}, '
+        '{"at": 0.41, "emotion": "laughing"}]\n\n'
+        f"Script:\n{script[:4500]}"
+    )
+    try:
+        resp = llm_provider.complete(
+            [{"role": "user", "content": prompt}],
+            temperature=0.3, max_tokens=400,
+        )
+        match = re.search(r'\[.*\]', resp or "", re.DOTALL)
+        data = json.loads(match.group(0)) if match else []
+    except Exception as e:
+        log.warning("[Reddit] emotion timeline failed (%s) — avatar will "
+                    "lip-flap only", e)
+        return []
+
+    beats = []
+    for item in data if isinstance(data, list) else []:
+        try:
+            at = float(item.get("at", -1))
+            emotion = str(item.get("emotion", "")).lower().strip()
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if 0.0 <= at <= 1.0 and emotion in ("shocked", "laughing", "angry", "sad"):
+            t = at * total_duration
+            beats.append(EmotionBeat(
+                start_s=t,
+                end_s=min(total_duration, t + DEFAULT_BEAT_HOLD_S),
+                emotion=emotion,
+            ))
+    beats.sort(key=lambda b: b.start_s)
+    log.info("[Reddit] emotion timeline: %d reaction beats (%s)",
+             len(beats), ", ".join(b.emotion for b in beats) or "none")
+    return beats
+
+
 def _sanitize_script(script: str) -> str:
     """Strip every non-spoken artifact an LLM narration script can leak.
 
@@ -850,11 +916,12 @@ def run_reddit_pipeline(
         result["errors"].append("Composite failed")
         return result
 
-    # Step 6a: PNGtuber narrator avatar (opt-in via channel.narrator_avatar).
-    # Overlays a 2-state lip-flap character driven by the narration
-    # audio. Runs BEFORE the polish layer so the avatar is part of the
-    # main content; intro/outro cards wrap around it cleanly. Failure
-    # is non-fatal — the faceless video ships if the avatar can't render.
+    # Step 6a: dynamic PNGtuber narrator avatar (opt-in via
+    # channel.narrator_avatar). The avatar lip-flaps with the
+    # narration AND holds a reaction expression (shocked / laughing /
+    # angry / sad) on each emotional story beat. Runs BEFORE the
+    # polish layer so the avatar is part of the main content;
+    # intro/outro cards wrap around it. Failure is non-fatal.
     if narrator_avatar:
         avatar_dir = Path(narrator_avatar).expanduser()
         closed = avatar_dir / "narrator_closed.png"
@@ -864,16 +931,24 @@ def run_reddit_pipeline(
                 from peanut_reacts.character.pngtuber import (
                     PngTuberStyle, add_narrator_avatar,
                 )
+                # Emotion pass: ask the LLM where the story beats are,
+                # so the avatar reacts instead of just flapping.
+                emotion_tl = generate_emotion_timeline(
+                    script, duration, llm_provider,
+                )
                 style = PngTuberStyle(
-                    closed_sprite=closed,
-                    open_sprite=opened,
+                    sprite_dir=avatar_dir,
                     position="bottom-left",
                     size_frac=0.26,
                 )
                 avatared = output_dir / f"reddit_{timestamp}_avatar.mp4"
-                res = add_narrator_avatar(video, audio, style, avatared)
+                res = add_narrator_avatar(
+                    video, audio, style, avatared,
+                    emotion_timeline=emotion_tl,
+                )
                 if res and res.exists():
-                    log.info("[Reddit] Narrator avatar composited: %s", res.name)
+                    log.info("[Reddit] Dynamic avatar composited: %s "
+                             "(%d reaction beats)", res.name, len(emotion_tl))
                     video = res
                 else:
                     log.info("[Reddit] Avatar skipped/failed — faceless video kept")
