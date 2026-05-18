@@ -521,6 +521,79 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return output_path
 
 
+# Animated-background assets live next to the package. parents:
+# [0]=scheduler [1]=peanut_reacts [2]=src [3]=project root.
+_ASSETS_BG = Path(__file__).resolve().parents[3] / "assets" / "backgrounds"
+_BG_LOOP_SECONDS = 24
+
+
+def _build_animated_background_loop(output: Path) -> Optional[Path]:
+    """Render the 24-second seamless animated-glow background loop.
+
+    This is the copyright-safe default background — a dark animated
+    gradient with three soft radial-glow blobs drifting on lissajous
+    paths (each motion period divides 24 s, so the clip loops cleanly).
+    The downstream composite step stream-loops whatever background it's
+    given, so a 24 s clip covers any video length.
+
+    Cached: the loop is generic (not video-specific), so it's rendered
+    once and reused for every video on this machine. ~30-60 s render.
+    """
+    if output.exists():
+        return output
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    glows = [
+        _ASSETS_BG / "glow_purple.png",
+        _ASSETS_BG / "glow_blue.png",
+        _ASSETS_BG / "glow_magenta.png",
+    ]
+    if not all(g.exists() for g in glows):
+        log.warning("[BG] glow sprites missing in %s — gradient fallback", _ASSETS_BG)
+        return None
+
+    # 3 drifting glow overlays. x/y are top-left of the overlaid PNG;
+    # W,H = frame, w,h = glow size. Each path's period divides 24 s.
+    filter_complex = (
+        "[0]format=rgba[base];"
+        "[base][1]overlay="
+        "x='W*0.30-w/2+200*sin(2*PI*t/24)'"
+        ":y='H*0.38-h/2+150*cos(2*PI*t/24)'[o1];"
+        "[o1][2]overlay="
+        "x='W*0.72-w/2+190*sin(2*PI*t/24+3.0)'"
+        ":y='H*0.44-h/2+170*sin(2*PI*t/12)'[o2];"
+        "[o2][3]overlay="
+        "x='W*0.50-w/2+260*cos(2*PI*t/12)'"
+        ":y='H*0.58-h/2+130*sin(2*PI*t/24+1.5)',"
+        "vignette=PI/3.6,format=yuv420p[v]"
+    )
+    try:
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i",
+            ("gradients=s=1920x1080"
+             ":c0=0x100b22:c1=0x1d1640:c2=0x0c1c33:c3=0x16112e"
+             f":duration={_BG_LOOP_SECONDS}:speed=0.006:r=30"),
+            "-loop", "1", "-i", str(glows[0]),
+            "-loop", "1", "-i", str(glows[1]),
+            "-loop", "1", "-i", str(glows[2]),
+            "-filter_complex", filter_complex,
+            "-map", "[v]",
+            "-t", str(_BG_LOOP_SECONDS),
+            "-c:v", "libx264", "-preset", "veryfast", "-r", "30",
+            str(output),
+        ], check=True, capture_output=True, timeout=600)
+        log.info("[BG] rendered animated-glow loop (%ds, cached)", _BG_LOOP_SECONDS)
+        return output
+    except subprocess.CalledProcessError as e:
+        log.error("[BG] animated loop render failed: %s",
+                  (e.stderr or b"").decode("utf-8", errors="replace")[-400:])
+        return None
+    except Exception as e:
+        log.error("[BG] animated loop crashed: %s", e)
+        return None
+
+
 def get_background_gameplay(
     duration_seconds: float,
     output: Path,
@@ -573,10 +646,19 @@ def get_background_gameplay(
             except Exception as e:
                 log.warning("background_video loop failed (%s) — gradient fallback", e)
 
-    # ── Path 2: animated gradient (default, copyright-safe) ───────
-    # `gradients` cycles through c0..c3 over `duration` seconds, then
-    # loops. speed keeps the drift slow enough not to distract from
-    # the subtitles. -t cuts it to the real video length.
+    # ── Path 2: animated glow loop (default, copyright-safe) ──────
+    # A 24 s seamless loop of a dark animated gradient + drifting
+    # radial-glow blobs. The composite step stream-loops the
+    # background, so the 24 s clip covers any video length. The loop
+    # is cached (generic, not video-specific) so it renders once.
+    loop = _build_animated_background_loop(_ASSETS_BG / "_animated_loop_1080.mp4")
+    if loop and loop.exists():
+        log.info("Background: animated glow loop")
+        return loop
+
+    # ── Path 3: plain gradient (last-resort fallback) ─────────────
+    # Reached only if the glow sprites are missing AND we couldn't
+    # render the loop. Flat-ish but never crashes the pipeline.
     cycle = max(8.0, min(30.0, duration_seconds))
     try:
         subprocess.run([
@@ -593,7 +675,7 @@ def get_background_gameplay(
             "-c:v", "libx264", "-preset", "veryfast",
             str(output),
         ], check=True, capture_output=True, timeout=900)
-        log.info("Background: animated gradient (%.0fs cycle)", cycle)
+        log.info("Background: plain gradient fallback (%.0fs cycle)", cycle)
         return output
     except Exception as e:
         log.error("Background gen failed: %s", e)

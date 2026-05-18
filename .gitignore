@@ -85,3 +85,4 @@ third_party/rhubarb*.zip
 # Editor / tool state that sneaks in
 .claire/
 .claude/
+assets/backgrounds/_animated_loop_1080.mp4
