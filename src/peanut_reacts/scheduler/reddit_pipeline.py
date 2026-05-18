@@ -28,10 +28,51 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SUBREDDITS = ["AmItheAsshole", "tifu", "MaliciousCompliance", "ProRevenge", "relationship_advice"]
 
 
+# Advertiser-unfriendly keyword blocklist. A story whose title OR body
+# contains any of these is skipped — Reddit's over_18 flag alone misses
+# plenty of content that trips YouTube's limited-ads / not-suitable-for-
+# advertisers filter (relationship stories casually mention body parts,
+# substances, violence without being NSFW-flagged). Conservative by
+# design: better to skip a borderline story than ship a demonetized
+# video. Word-boundary matched so "assassin" doesn't trip on "ass".
+_BLOCKLIST = {
+    # sexual / anatomy
+    "sex", "sexual", "porn", "nude", "naked", "breast", "breasts",
+    "boob", "boobs", "penis", "vagina", "genital", "masturbat",
+    "orgasm", "horny", "nsfw", "onlyfans", "escort", "prostitut",
+    # violence / self-harm
+    "suicide", "suicidal", "self-harm", "kill myself", "rape", "raped",
+    "molest", "abuse", "abused", "murder", "overdose",
+    # substances
+    "cocaine", "heroin", "meth ", "drug dealer",
+    # slurs / hate (catch-alls; the obvious ones)
+    "slur", "racist",
+}
+
+
+def _is_advertiser_safe(title: str, text: str) -> tuple[bool, str]:
+    """Return (safe, reason). A story is unsafe if any blocklist term
+    appears as a whole word in the title or body. Reason names the first
+    hit so skips are debuggable in the logs."""
+    import re as _re
+    haystack = f"{title}\n{text}".lower()
+    for term in _BLOCKLIST:
+        # Whole-word match for short terms; substring for term-stems
+        # that end in a space or are prefixes (e.g. "masturbat").
+        if term.endswith(" ") or term[-1].isalpha() and len(term) >= 7:
+            if term.strip() in haystack:
+                return False, term.strip()
+        else:
+            if _re.search(rf"\b{_re.escape(term)}\b", haystack):
+                return False, term
+    return True, ""
+
+
 def _parse_reddit_listing(data: dict, subreddit: str, min_score: int) -> list[dict]:
     """Shared shape parser for Reddit listing JSON (used by both Scrape.do
     and the direct-httpx fallback)."""
     posts = []
+    skipped_unsafe = 0
     for child in data.get("data", {}).get("children", []):
         post = child.get("data", {})
         if post.get("score", 0) < min_score:
@@ -39,6 +80,15 @@ def _parse_reddit_listing(data: dict, subreddit: str, min_score: int) -> list[di
         if post.get("stickied") or post.get("over_18"):
             continue
         if len(post.get("selftext", "")) < 200:
+            continue
+        # Content-safety gate — protects monetization
+        safe, reason = _is_advertiser_safe(
+            post.get("title", ""), post.get("selftext", ""),
+        )
+        if not safe:
+            skipped_unsafe += 1
+            log.info("[Reddit] skipped r/%s post (blocklist hit: %r)",
+                     subreddit, reason)
             continue
         posts.append({
             "id": post["id"],
@@ -148,25 +198,12 @@ def fetch_top_stories(subreddit: str, min_score: int = 3000, limit: int = 10) ->
             timeout=30, follow_redirects=True,
         )
         resp.raise_for_status()
-        posts = []
-        for child in resp.json().get("data", {}).get("children", []):
-            post = child["data"]
-            if post.get("score", 0) < min_score:
-                continue
-            if post.get("stickied") or post.get("over_18"):
-                continue
-            if len(post.get("selftext", "")) < 200:
-                continue
-            posts.append({
-                "id": post["id"],
-                "title": post["title"],
-                "text": post["selftext"][:5000],
-                "score": post.get("score", 0),
-                "subreddit": subreddit,
-                "url": f"https://reddit.com{post['permalink']}",
-                "author": post.get("author", "[deleted]"),
-                "num_comments": post.get("num_comments", 0),
-            })
+        # Route through the SHARED parser so the advertiser-safety
+        # content filter applies here too. Previously this path had
+        # its own inline loop that bypassed _is_advertiser_safe —
+        # that's how "Boob Cancer Clapback" slipped through in the
+        # smoke test. Single parser = single filter, no drift.
+        posts = _parse_reddit_listing(resp.json(), subreddit, min_score)
         log.info("r/%s: %d stories (score >= %d) via public JSON",
                  subreddit, len(posts), min_score)
         return posts
@@ -183,19 +220,43 @@ def generate_narration_script(stories: list[dict], llm_provider, character: str 
         stories_text += f"Title: {s['title']}\n"
         stories_text += f"{s['text'][:2000]}\n"
 
+    # Length scales with story count (~3-4 spoken min per story) so a
+    # single-story video isn't padded to a bloated 11 minutes — the
+    # smoke test showed exactly that failure with the old fixed
+    # "10-12 minutes" instruction.
+    n = max(1, len(stories))
+    target_min = 3 * n + 1
+
     prompt = (
         f"You are {character}, a sarcastic narrator with dry humor. "
-        f"Rewrite these Reddit stories into an engaging YouTube narration script.\n\n"
-        f"Rules:\n"
-        f"- Start with a hook: \"Oh, THIS should be good...\"\n"
-        f"- Between each story, add {character}'s commentary (2-3 sentences, sarcastic)\n"
-        f"- Paraphrase the story (don't copy word-for-word)\n"
-        f"- Add dramatic pauses marked as [PAUSE]\n"
-        f"- Add emotion cues in brackets: [shocked], [laughing], [sarcastic], [serious]\n"
-        f"- End with a verdict and call to action\n"
-        f"- Total script should take about 10-12 minutes to read\n\n"
-        f"Stories:\n{stories_text}\n\n"
-        f"Write the full narration script:"
+        f"Rewrite these Reddit stories into an engaging YouTube narration "
+        f"script.\n\n"
+        f"OUTPUT FORMAT — read this twice, it is the most important rule:\n"
+        f"Output ONLY the exact words to be spoken aloud. The text you "
+        f"return is fed STRAIGHT into a text-to-speech engine and burned "
+        f"into on-screen subtitles. Anything that is not a spoken word "
+        f"will be read aloud by a robot voice and shown on screen, which "
+        f"ruins the video. Therefore your output must contain:\n"
+        f"  NO title or headline\n"
+        f"  NO speaker labels ('{character}:', '{character} Narrates:', etc.)\n"
+        f"  NO timestamps or time markers ('[0:00]', '(2:30)')\n"
+        f"  NO duration/meta lines ('Approx. 11 minutes', 'Word count: ...')\n"
+        f"  NO stage directions in brackets or parentheses "
+        f"('[shocked]', '(dry tone)', '[PAUSE]')\n"
+        f"  NO markdown — no #, no *, no -, no bullet points\n"
+        f"  NO scene numbers ('Story 1:', 'Part 2')\n"
+        f"Just the clean prose paragraphs the narrator speaks, separated "
+        f"by blank lines.\n\n"
+        f"CONTENT RULES:\n"
+        f"- Open with a hook line that grabs attention immediately\n"
+        f"- Paraphrase each story in your own words — never copy verbatim\n"
+        f"- Between stories, slip in 2-3 sarcastic sentences of your own "
+        f"take, woven into the prose (not labelled)\n"
+        f"- Keep it advertiser-friendly: no graphic content, no slurs\n"
+        f"- End with a verdict and a natural call to subscribe\n"
+        f"- Target about {target_min} minutes of spoken narration total\n\n"
+        f"Stories to adapt:\n{stories_text}\n\n"
+        f"Write the narration script — spoken words only:"
     )
 
     try:
@@ -207,6 +268,70 @@ def generate_narration_script(stories: list[dict], llm_provider, character: str 
     except Exception as e:
         log.error("Script generation failed: %s", e)
         return ""
+
+
+def _sanitize_script(script: str) -> str:
+    """Strip every non-spoken artifact an LLM narration script can leak.
+
+    Removes, in order:
+      - bracketed content [anything] — timestamps, [PAUSE], [shocked]
+      - parenthetical stage directions (dry tone) — short parens only,
+        so a legitimate long aside in prose survives
+      - markdown — *, #, leading - / bullets
+      - speaker labels — "Cashew:", "Cashew Narrates:", "Narrator:"
+        at the start of any line OR sentence
+      - meta lines — "Approx. 11 minutes", "Word count: ...",
+        "Title: ...", "Duration: ..."
+      - a leading title line (first line, short, no sentence
+        punctuation = almost certainly a heading)
+
+    Whatever remains is clean spoken prose in blank-line-separated
+    paragraphs.
+    """
+    s = script
+
+    # All bracketed spans deleted outright. [PAUSE] just becomes a
+    # space — the surrounding sentence punctuation already carries the
+    # pacing, and replacing it with a period risks doubled periods.
+    s = re.sub(r'\[[^\]\n]{0,60}\]', ' ', s)
+
+    # Short parentheticals (<= 45 chars) are stage directions —
+    # "(dry, flat tone)", "(beat)", "(2:30)". Longer ones are likely
+    # real prose asides; leave those.
+    s = re.sub(r'\([^()\n]{0,45}\)', '', s)
+
+    # Markdown emphasis / headings / bullets
+    s = s.replace('*', '').replace('_', '')
+    s = re.sub(r'(?m)^\s*#{1,6}\s*', '', s)
+    s = re.sub(r'(?m)^\s*[-•·]\s+', '', s)
+
+    # Speaker labels: "<Name>:" or "<Name> Narrates:" at line start
+    # or right after sentence-ending punctuation. Name = a single
+    # Capitalized token (optionally + "Narrates"/"Narrating").
+    label = r'[A-Z][a-zA-Z]{1,15}(?:\s+Narrat(?:es|ing))?\s*:\s*'
+    s = re.sub(rf'(?m)^\s*{label}', '', s)
+    s = re.sub(rf'(?<=[.!?])\s+{label}', ' ', s)
+
+    # Meta lines — drop the whole line if it looks like script metadata
+    meta = re.compile(
+        r'(?im)^\s*(approx\.?|approximately|word count|duration|'
+        r'runtime|total|length|title|script)\b.*$'
+    )
+    s = meta.sub('', s)
+
+    # Leading title line: if the first non-empty line is short and has
+    # no sentence-ending punctuation, it's a heading — drop it.
+    lines = s.lstrip().split('\n')
+    if lines:
+        first = lines[0].strip()
+        if 0 < len(first) <= 60 and not re.search(r'[.!?]', first):
+            s = '\n'.join(lines[1:])
+
+    # Collapse whitespace the strips leave behind
+    s = re.sub(r'[ \t]{2,}', ' ', s)
+    s = re.sub(r' +([.,!?])', r'\1', s)        # no space before punctuation
+    s = re.sub(r'\n{3,}', '\n\n', s)
+    return s.strip()
 
 
 def script_to_tts(script: str, output_dir: Path, voice: str = "en-US-ChristopherNeural",
@@ -223,10 +348,15 @@ def script_to_tts(script: str, output_dir: Path, voice: str = "en-US-Christopher
     output_dir.mkdir(parents=True, exist_ok=True)
     tts = EdgeTTSEngine(TTSConfig(voice=voice, rate=rate))
 
-    # Split script into chunks (by paragraph or emotion cue)
-    # Remove emotion cues for TTS but note them
-    clean = re.sub(r'\[PAUSE\]', '.  ', script)
-    clean = re.sub(r'\[(shocked|laughing|sarcastic|serious|excited|confused)\]', '', clean)
+    # ── Sanitize the script before TTS + subtitles ────────────────
+    # Backstop for the LLM. The prompt explicitly forbids non-spoken
+    # text, but models still leak titles, timestamps, speaker labels,
+    # stage directions and markdown. Whatever survives here gets read
+    # aloud by the TTS AND burned into subtitles, so the sanitizer is
+    # deliberately aggressive — over-stripping a few words is harmless,
+    # under-stripping puts "[0:00] Cashew (dry tone)" on screen.
+    clean = _sanitize_script(script)
+
     paragraphs = [p.strip() for p in clean.split('\n\n') if p.strip() and len(p.strip()) > 20]
 
     chunks = []
@@ -391,25 +521,79 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return output_path
 
 
-def get_background_gameplay(duration_seconds: float, output: Path) -> Optional[Path]:
-    """Get or generate background gameplay footage (Minecraft parkour / satisfying)."""
+def get_background_gameplay(
+    duration_seconds: float,
+    output: Path,
+    background_video: str = "",
+) -> Optional[Path]:
+    """Produce the background video track.
+
+    Two paths:
+
+      1. background_video set + file exists  → loop that real footage.
+         The user sources their own copyright-SAFE clip (own recorded
+         gameplay, purchased stock, a CC0 parkour loop). We just scale
+         + crop + loop it to fill the runtime. This is the "real
+         gameplay background" every successful Reddit-story channel
+         uses for retention.
+
+      2. no clip                            → animated gradient.
+         ffmpeg's `gradients` lavfi source generates a slow-drifting
+         multi-colour gradient. Real MOTION (the retention lever) with
+         zero copyright risk. Far better than the old flat navy +
+         "r/ Stories" placeholder watermark, which is removed here.
+
+    The smoke test showed the flat-colour background made videos look
+    empty and low-effort — this is the fix.
+    """
     if output.exists():
         return output
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    # Generate a simple animated gradient background as fallback
+    # ── Path 1: real looping footage ──────────────────────────────
+    if background_video:
+        from pathlib import Path as _P
+        bg = _P(background_video).expanduser()
+        if bg.exists():
+            try:
+                subprocess.run([
+                    "ffmpeg", "-y",
+                    "-stream_loop", "-1", "-i", str(bg),
+                    "-t", str(duration_seconds),
+                    "-vf", (
+                        "scale=1920:1080:force_original_aspect_ratio=increase,"
+                        "crop=1920:1080,format=yuv420p"
+                    ),
+                    "-an",
+                    "-c:v", "libx264", "-preset", "veryfast",
+                    str(output),
+                ], check=True, capture_output=True, timeout=1800)
+                log.info("Background: looped real footage %s", bg.name)
+                return output
+            except Exception as e:
+                log.warning("background_video loop failed (%s) — gradient fallback", e)
+
+    # ── Path 2: animated gradient (default, copyright-safe) ───────
+    # `gradients` cycles through c0..c3 over `duration` seconds, then
+    # loops. speed keeps the drift slow enough not to distract from
+    # the subtitles. -t cuts it to the real video length.
+    cycle = max(8.0, min(30.0, duration_seconds))
     try:
         subprocess.run([
             "ffmpeg", "-y",
             "-f", "lavfi", "-i",
-            f"color=c=#1a1a2e:s=1920x1080:d={duration_seconds},format=yuv420p",
-            "-vf", (
-                "drawtext=text='r/ Stories':fontcolor=white@0.3:fontsize=120:"
-                "x=(w-text_w)/2:y=(h-text_h)/2:font=Arial"
+            (
+                "gradients=s=1920x1080"
+                ":c0=0x140d28:c1=0x241640:c2=0x0d2b3a:c3=0x1a1633"
+                ":x0=160:y0=120:x1=1760:y1=960"
+                f":duration={cycle:.1f}:speed=0.013:r=30"
             ),
-            "-c:v", "libx264", "-preset", "veryfast", "-t", str(duration_seconds),
+            "-t", str(duration_seconds),
+            "-vf", "format=yuv420p",
+            "-c:v", "libx264", "-preset", "veryfast",
             str(output),
-        ], check=True, capture_output=True, timeout=600)
+        ], check=True, capture_output=True, timeout=900)
+        log.info("Background: animated gradient (%.0fs cycle)", cycle)
         return output
     except Exception as e:
         log.error("Background gen failed: %s", e)
@@ -500,6 +684,7 @@ def run_reddit_pipeline(
     tags: list[str] = None,
     tiktok_cookies: str = "",
     narrator_avatar: str = "",
+    background_video: str = "",
 ) -> dict:
     """Full Reddit stories pipeline. Returns {video_path, youtube_url, shorts_count}."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -568,7 +753,7 @@ def run_reddit_pipeline(
     duration = float(r.stdout.strip()) if r.stdout.strip() else 600
 
     bg = output_dir / "background.mp4"
-    background = get_background_gameplay(duration, bg)
+    background = get_background_gameplay(duration, bg, background_video=background_video)
 
     # Step 6: Composite with burned-in subs
     log.info("[Reddit] Compositing video%s...",

@@ -139,6 +139,7 @@ def main() -> int:
         tags=channel.tags,
         tiktok_cookies="",               # <-- no TikTok either
         narrator_avatar=narrator_avatar,
+        background_video=channel.background_video,
     )
     dt = time.time() - t0
 

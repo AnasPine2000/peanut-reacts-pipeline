@@ -763,6 +763,7 @@ def run_reddit_pipeline(
             tags=channel.tags,
             tiktok_cookies=channel.tiktok_cookies,
             narrator_avatar=channel.narrator_avatar,
+            background_video=channel.background_video,
         )
 
         if result.get("errors"):

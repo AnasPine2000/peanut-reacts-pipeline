@@ -52,6 +52,11 @@ class ChannelConfig:
     # narration audio. Empty = faceless video (current default).
     # See character/pngtuber.py.
     narrator_avatar: str = ""
+    # Optional background gameplay clip. If set + the file exists, the
+    # reddit pipeline loops this footage behind the text instead of the
+    # animated-gradient default. Source your own COPYRIGHT-SAFE clip
+    # (own recording / stock / CC0). Empty = animated gradient.
+    background_video: str = ""
     max_videos_per_run: int = 2
     max_segments_per_run: int = 5
     video_format: str = "standard"  # standard | compilation
