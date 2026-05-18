@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# peanut — pipeline operations CLI (Linux/macOS/Git-Bash wrapper)
+# Run `./peanut <command>` from the repo root.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="$HERE/src:$PYTHONPATH"
+exec python3 "$HERE/scripts/peanut.py" "$@"
