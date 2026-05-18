@@ -936,6 +936,21 @@ def run_reddit_pipeline(
                 emotion_tl = generate_emotion_timeline(
                     script, duration, llm_provider,
                 )
+                # Dump the timeline as a JSON sidecar — handy for
+                # debugging and for reviewing which beat fired where.
+                try:
+                    import json as _json
+                    (output_dir / f"emotion_timeline_{timestamp}.json").write_text(
+                        _json.dumps([
+                            {"start_s": round(b.start_s, 2),
+                             "end_s": round(b.end_s, 2),
+                             "emotion": b.emotion}
+                            for b in emotion_tl
+                        ], indent=2),
+                        encoding="utf-8",
+                    )
+                except Exception:
+                    pass
                 style = PngTuberStyle(
                     sprite_dir=avatar_dir,
                     position="bottom-left",
