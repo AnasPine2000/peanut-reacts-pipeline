@@ -19,7 +19,7 @@ requests>=2.32.0
 yt-dlp>=2024.1.0
 google-api-python-client>=2.100.0
 google-auth-oauthlib>=1.1.0
-google-auth>=2.25.0
+google-auth>=2.53.0
 
 # Media pipeline (ffmpeg is installed via apt in the workflow)
 Pillow>=10.0.0
