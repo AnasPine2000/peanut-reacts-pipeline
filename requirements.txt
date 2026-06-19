@@ -43,7 +43,7 @@ plotly>=5.17.0
 praw>=7.7.0
 
 # Selenium (TikTok uploader)
-selenium>=4.15.0
+selenium>=4.43.0
 webdriver-manager>=4.0.0
 
 # HuggingFace (status push)
