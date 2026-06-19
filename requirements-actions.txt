@@ -28,7 +28,7 @@ edge-tts>=6.1.0
 pysrt>=1.1.2
 
 # Scheduler + job framework (used by channel_config, orchestrator imports)
-APScheduler>=3.10.0
+APScheduler>=3.11.2
 
 # Reddit + trending scraping
 scrapling>=0.2.0    # optional, falls back if missing

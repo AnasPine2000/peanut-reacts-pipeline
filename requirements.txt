@@ -31,7 +31,7 @@ google-auth-httplib2>=0.1.1
 openai>=1.30.0
 
 # Scheduler
-APScheduler>=3.10.0
+APScheduler>=3.11.2
 SQLAlchemy>=2.0.0
 
 # Dashboard
